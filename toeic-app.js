@@ -1148,6 +1148,7 @@ const App = (() => {
     quizUserAnswers = new Array(allQ.length).fill(null);
     quizTimeLeft    = allQ.length * 45;
     quizMode        = 'exam-review';
+    _currentUnitId  = null;  // đề kiểm tra không thuộc unit nào
 
     document.getElementById('quiz-setup').style.display      = 'none';
     document.getElementById('quiz-container').style.display  = 'block';
@@ -1801,6 +1802,7 @@ const App = (() => {
       newOnes.forEach(a => {
         setTimeout(() => showToast(`🏅 Thành tích mới: ${a.icon} ${a.name}`, '🎉'), 400);
       });
+      if (currentPage === 'stats') renderStatsPage();
     }
   }
 
@@ -1900,7 +1902,7 @@ const App = (() => {
   }
 
   function startUnitQuizFromPage(unitId) {
-    // Trigger unit quiz and navigate to practice
+    _currentUnitId = unitId;
     navigate('practice');
     requestAnimationFrame(() => {
       generateUnitQuiz(unitId, undefined);
@@ -2073,11 +2075,10 @@ const App = (() => {
     return { year: d.getFullYear(), week };
   }
 
-  // Monkey-patch generateUnitQuiz to track unit id
-  const _origGenerateUnitQuiz = generateUnitQuiz;
+  // generateUnitQuizTracked — alias giữ tương thích, _currentUnitId được set tại điểm gọi
   function generateUnitQuizTracked(unitId, seed) {
     _currentUnitId = unitId;
-    _origGenerateUnitQuiz(unitId, seed);
+    generateUnitQuiz(unitId, seed);
   }
 
   // ─── Hook navigate to render stats/units on page open ─────
