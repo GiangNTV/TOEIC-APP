@@ -24,29 +24,29 @@ const App = (() => {
   };
 
   const UNIT_METADATA = [
-    { id:1,  title:"Business Foundations",    vocab:["Office","Business"],              grammar:"verb-tense"         },
-    { id:2,  title:"Office Life",             vocab:["Workplace","HR"],                 grammar:"passive"            },
-    { id:3,  title:"Personnel & HR",          vocab:["Recruitment","Training"],         grammar:"conditionals"       },
-    { id:4,  title:"Marketing & Sales",       vocab:["Marketing","Sales"],              grammar:"word-form"          },
-    { id:5,  title:"Finance & Budget",        vocab:["Finance","Accounting"],           grammar:"preposition"        }, // fixed: prepositions→preposition (matches question type)
-    { id:6,  title:"Tech & Innovation",       vocab:["Tech","Innovation"],              grammar:"conjunction"        },
-    { id:7,  title:"Manufacturing & QC",      vocab:["Manufacturing","Production"],     grammar:"pronoun"            },
-    { id:8,  title:"Travel & Tourism",        vocab:["Travel","Tourism"],               grammar:"relative-clause"    },
-    { id:9,  title:"Corporate Events",        vocab:["Events","Conferences"],           grammar:"modal"              },
-    { id:10, title:"Customer Service",        vocab:["Customer","Customer Service"],    grammar:"gerund-infinitive"  },
-    { id:11, title:"Logistics",               vocab:["Logistics","Shipping"],           grammar:"comparison"         },
-    { id:12, title:"Health & Safety",         vocab:["Health","Safety"],                grammar:"participles"        },
-    { id:13, title:"Banking & Investment",    vocab:["Finance","Accounting"],           grammar:"subject-verb"       },
-    { id:14, title:"Real Estate",             vocab:["Property","Facilities"],          grammar:"noun-clauses"       },
-    { id:15, title:"Media & Communications", vocab:["Media","Communication"],          grammar:"adverb-time"        },
-    { id:16, title:"Retail & E-commerce",    vocab:["Sales","E-commerce"],             grammar:"vocabulary-context" },
-    { id:17, title:"Research & Development", vocab:["Research","Data"],                grammar:"vocabulary"         }, // fixed: part6-strategy→vocabulary (no Part5 qs with that type)
-    { id:18, title:"Professional Training",  vocab:["Training","Education"],           grammar:"vocabulary-context" }, // fixed: part7-strategy→vocabulary-context
-    { id:19, title:"Law & Contracts",        vocab:["Legal","Contract"],               grammar:"inversion"          },
-    { id:20, title:"Environment & Energy",   vocab:["Environment","Sustainability"],   grammar:"quantifiers"        },
-    { id:21, title:"Business Communications",vocab:["Communication","Phrases"],        grammar:"business-english"   },
-    { id:22, title:"Corporate Policy",       vocab:["Management","Leadership"],        grammar:"subjunctive"        },
-    { id:23, title:"Advanced Structures",    vocab:["General","Advanced"],             grammar:"prep-structures"    },
+    { id:1,  title:"Business Foundations",    vocab:["Office","Business"],                       grammar:"verb-tense"         },
+    { id:2,  title:"Office Life",             vocab:["HR","Office"],                             grammar:"passive"            },
+    { id:3,  title:"Personnel & HR",          vocab:["HR","Leadership"],                         grammar:"conditionals"       },
+    { id:4,  title:"Marketing & Sales",       vocab:["Marketing","Sales"],                       grammar:"word-form"          },
+    { id:5,  title:"Finance & Budget",        vocab:["Finance","Accounting"],                    grammar:"preposition"        },
+    { id:6,  title:"Tech & Innovation",       vocab:["Tech","Digital"],                          grammar:"conjunction"        },
+    { id:7,  title:"Manufacturing & QC",      vocab:["Manufacturing","Supply Chain"],            grammar:"pronoun"            },
+    { id:8,  title:"Travel & Tourism",        vocab:["Travel"],                                  grammar:"relative-clause"    },
+    { id:9,  title:"Corporate Events",        vocab:["Events"],                                  grammar:"modal"              },
+    { id:10, title:"Customer Service",        vocab:["Customer Service"],                        grammar:"gerund-infinitive"  },
+    { id:11, title:"Logistics & Shipping",    vocab:["Supply Chain","Insurance"],                grammar:"comparison"         },
+    { id:12, title:"Health & Safety",         vocab:["Healthcare","Safety"],                     grammar:"participles"        },
+    { id:13, title:"Banking & Investment",    vocab:["Finance","Accounting"],                    grammar:"subject-verb"       },
+    { id:14, title:"Real Estate",             vocab:["Property"],                                grammar:"noun-clauses"       },
+    { id:15, title:"Media & Communications", vocab:["Media"],                                   grammar:"adverb-time"        },
+    { id:16, title:"Retail & E-commerce",    vocab:["Sales","E-commerce"],                      grammar:"vocabulary-context" },
+    { id:17, title:"Research & Development", vocab:["Project Management","General"],             grammar:"vocabulary"         },
+    { id:18, title:"Professional Training",  vocab:["Education"],                               grammar:"vocabulary-context" },
+    { id:19, title:"Law & Contracts",        vocab:["Legal"],                                   grammar:"inversion"          },
+    { id:20, title:"Environment & Energy",   vocab:["Environment","Sustainability"],             grammar:"quantifiers"        },
+    { id:21, title:"Business Communications",vocab:["Collocations","Phrases"],                  grammar:"business-english"   },
+    { id:22, title:"Corporate Policy",       vocab:["Leadership","Business"],                   grammar:"subjunctive"        },
+    { id:23, title:"Advanced Structures",    vocab:["General","Food & Beverage"],               grammar:"prep-structures"    },
   ];
 
   // ─── TOEIC Reading Score Conversion Table (% đúng → dải điểm) ───
@@ -135,7 +135,7 @@ const App = (() => {
   // ─── Navigation ───
   function setupNav() {
     document.querySelectorAll('.nav-btn').forEach(btn => {
-      btn.addEventListener('click', () => navigate(btn.dataset.page));
+      btn.addEventListener('click', () => App.navigate(btn.dataset.page));
     });
   }
 
@@ -1082,19 +1082,7 @@ const App = (() => {
   }
 
   function handleHomeworkCode(code) {
-    // ── Mã đề kiểm tra: EXAM-P{p5}-G{p6}-Q{p7}-{seed} ──
-    const examMatch = code.match(/EXAM-P(\d+)-G(\d+)-Q(\d+)-(\d+)/i);
-    if (examMatch) {
-      generateExamFromCode(
-        parseInt(examMatch[1]),  // p5Count
-        parseInt(examMatch[2]),  // p6Groups
-        parseInt(examMatch[3]),  // p7Target
-        parseInt(examMatch[4])   // seed
-      );
-      return;
-    }
-
-    // ── Mã bài tập về nhà: HW-UNIT-{unitId}-{seed} ──
+    // Định dạng chuẩn: HW-UNIT-{unitId}-{seed}
     const match = code.match(/HW-UNIT-(\d+)-(\d+)/i);
     if (match) {
       _currentUnitId = parseInt(match[1]);
@@ -1104,73 +1092,9 @@ const App = (() => {
       if (fallback) {
         showToast('Mã cũ — không có seed. Vui lòng dùng mã mới từ giáo viên (VD: HW-UNIT-1-4823)', '⚠️');
       } else {
-        showToast('Mã không hợp lệ. Định dạng: HW-UNIT-1-4823 hoặc EXAM-P30-G4-Q54-123456', '⚠️');
+        showToast('Mã không hợp lệ. Định dạng: HW-UNIT-1-4823', '⚠️');
       }
     }
-  }
-
-  // ─── Tái tạo đề kiểm tra từ mã EXAM ──────────────────────────
-  function generateExamFromCode(p5Count, p6Groups, p7Target, seed) {
-    // ── Part 5: seeded shuffle toàn bộ pool, lấy p5Count câu đầu ──
-    const p5pool     = seededShuffle([...DB.questions.part5], seed);
-    const selectedP5 = p5pool.slice(0, Math.min(p5Count, p5pool.length));
-
-    // ── Part 6: seeded shuffle, lấy p6Groups đoạn đầy đủ 4 câu ──
-    const p6full     = DB.questions.part6.filter(g => g.questions.length === 4);
-    const selectedP6 = seededShuffle(p6full, seed + 1).slice(0, Math.min(p6Groups, p6full.length));
-
-    // ── Part 7: seeded shuffle theo loại giống teacher-core ──
-    const singles = seededShuffle(DB.questions.part7.filter(g => g.type === 'single' || !g.type), seed + 2);
-    const doubles = seededShuffle(DB.questions.part7.filter(g => g.type === 'double'), seed + 3);
-    const triples = seededShuffle(DB.questions.part7.filter(g => g.type === 'triple'), seed + 4);
-    const selectedP7 = [];
-    let p7count = 0;
-    const addGroups = list => {
-      for (const g of list) {
-        if (p7count + g.questions.length <= p7Target) { selectedP7.push(g); p7count += g.questions.length; }
-      }
-    };
-    addGroups(triples.slice(0, 3));
-    addGroups(doubles.slice(0, 2));
-    addGroups(singles);
-
-    if (selectedP5.length === 0) { showToast('Không tải được đề — dữ liệu thiếu câu hỏi Part 5.', '❌'); return; }
-
-    // Flatten thành quizQuestions
-    const allQ = [
-      ...selectedP5.map(q => ({...q, part:5})),
-      ...selectedP6.flatMap(g => g.questions.map(q => ({...q, passage:g.passage, passageTitle:g.passageTitle, type:g.type||'text-completion', part:6}))),
-      ...selectedP7.flatMap(g => g.questions.map(q => ({...q, passage:g.passage, passageTitle:g.passageTitle, type:g.type||'single', part:7}))),
-    ];
-
-    quizQuestions   = allQ;
-    quizIndex = 0; quizScore = 0; quizAnswered = 0;
-    quizUserAnswers = new Array(allQ.length).fill(null);
-    quizTimeLeft    = allQ.length * 45;
-    quizMode        = 'exam-review';
-    _currentUnitId  = null;  // đề kiểm tra không thuộc unit nào
-
-    document.getElementById('quiz-setup').style.display      = 'none';
-    document.getElementById('quiz-container').style.display  = 'block';
-    document.getElementById('results-container').style.display = 'none';
-    document.getElementById('quiz-total').textContent        = allQ.length;
-
-    const partLabel = document.getElementById('quiz-part-label');
-    partLabel.textContent    = 'Mock Test';
-    partLabel.className      = 'tag';
-    partLabel.style.background = '#2563eb';
-    partLabel.style.color      = '#fff';
-
-    const unseenBadge = document.getElementById('quiz-unseen-badge');
-    if (unseenBadge) {
-      unseenBadge.textContent   = `📝 Đề kiểm tra | P5:${selectedP5.length} P6:${selectedP6.reduce((s,g)=>s+g.questions.length,0)} P7:${p7count} câu`;
-      unseenBadge.style.display = 'inline-block';
-    }
-
-    startTimer();
-    renderQuestionNavigator();
-    renderQuestion();
-    showToast(`✅ Đã tải đề kiểm tra · ${allQ.length} câu`, '📝');
   }
 
   // ─── Seeded PRNG (Mulberry32) ───
@@ -1768,17 +1692,84 @@ const App = (() => {
 
   // ─── Achievements ─────────────────────────────────────────
   const ACHIEVEMENTS = [
-    { id:'first_quiz',   icon:'🎯', name:'Bắt đầu học',    desc:'Hoàn thành bài thi đầu tiên',   check: p => (p.testsCompleted||0) >= 1 },
-    { id:'streak3',      icon:'🔥', name:'On fire!',        desc:'Streak 3 ngày liên tiếp',        check: () => getStreakCount() >= 3 },
-    { id:'streak7',      icon:'💥', name:'Tuần bất bại',    desc:'Streak 7 ngày liên tiếp',        check: () => getStreakCount() >= 7 },
-    { id:'vocab50',      icon:'📖', name:'Từ vựng cơ bản',  desc:'Học 50 từ vựng',                 check: p => (p.vocabSeen||0) >= 50 },
-    { id:'vocab200',     icon:'📚', name:'Từ điển nhỏ',     desc:'Học 200 từ vựng',                check: p => (p.vocabSeen||0) >= 200 },
-    { id:'acc80',        icon:'🎓', name:'Chính xác cao',   desc:'Độ chính xác ≥ 80%',             check: p => (p.accuracy||0) >= 80 },
-    { id:'test10',       icon:'✏️', name:'Luyện tập chăm',  desc:'Hoàn thành 10 bài thi',          check: p => (p.testsCompleted||0) >= 10 },
-    { id:'xp500',        icon:'⚡', name:'Năng lượng!',     desc:'Đạt 500 XP',                     check: () => getXP() >= 500 },
-    { id:'xp2000',       icon:'💎', name:'Chăm chỉ đỉnh',  desc:'Đạt 2000 XP',                    check: () => getXP() >= 2000 },
-    { id:'srs20',        icon:'🧠', name:'Trí nhớ sắt',     desc:'Hoàn thành 20 thẻ SRS',          check: () => Object.keys(getSrsData()).length >= 20 },
-    { id:'perfect',      icon:'🏆', name:'Hoàn hảo',        desc:'Đạt 100% một bài thi',           check: p => (p.hasPerfect||false) },
+    // ── Khởi đầu ──
+    { id:'first_quiz',   icon:'🎯', name:'Bắt đầu học',     desc:'Hoàn thành bài thi đầu tiên',
+      check: p => (p.testsCompleted||0) >= 1,
+      progress: p => ({ cur: Math.min(p.testsCompleted||0, 1), max: 1 }) },
+    { id:'test10',       icon:'✏️', name:'Luyện tập chăm',   desc:'Hoàn thành 10 bài thi',
+      check: p => (p.testsCompleted||0) >= 10,
+      progress: p => ({ cur: Math.min(p.testsCompleted||0, 10), max: 10 }) },
+    { id:'test30',       icon:'📋', name:'Chiến binh',        desc:'Hoàn thành 30 bài thi',
+      check: p => (p.testsCompleted||0) >= 30,
+      progress: p => ({ cur: Math.min(p.testsCompleted||0, 30), max: 30 }) },
+    { id:'perfect',      icon:'🏆', name:'Hoàn hảo',          desc:'Đạt 100% một bài thi',
+      check: p => (p.hasPerfect||false),
+      progress: p => ({ cur: p.hasPerfect ? 1 : 0, max: 1 }) },
+    { id:'acc80',        icon:'🎓', name:'Chính xác cao',     desc:'Độ chính xác tổng ≥ 80%',
+      check: p => (p.accuracy||0) >= 80,
+      progress: p => ({ cur: Math.min(p.accuracy||0, 80), max: 80, unit: '%' }) },
+    // ── Từ vựng ──
+    { id:'vocab50',      icon:'📖', name:'Từ vựng cơ bản',   desc:'Học 50 từ vựng',
+      check: p => (p.vocabSeen||0) >= 50,
+      progress: p => ({ cur: Math.min(p.vocabSeen||0, 50), max: 50 }) },
+    { id:'vocab200',     icon:'📚', name:'Từ điển nhỏ',       desc:'Học 200 từ vựng',
+      check: p => (p.vocabSeen||0) >= 200,
+      progress: p => ({ cur: Math.min(p.vocabSeen||0, 200), max: 200 }) },
+    { id:'vocab500',     icon:'🗂️', name:'Từ điển lớn',       desc:'Học 500 từ vựng',
+      check: p => (p.vocabSeen||0) >= 500,
+      progress: p => ({ cur: Math.min(p.vocabSeen||0, 500), max: 500 }) },
+    { id:'srs20',        icon:'🧠', name:'Trí nhớ sắt',       desc:'Làm quen 20 thẻ SRS',
+      check: () => Object.keys(getSrsData()).length >= 20,
+      progress: () => ({ cur: Math.min(Object.keys(getSrsData()).length, 20), max: 20 }) },
+    { id:'srs_master',   icon:'💡', name:'SRS Master',         desc:'Thuộc 50 thẻ SRS (≥4 lần)',
+      check: () => Object.values(getSrsData()).filter(c=>c.reps>=4).length >= 50,
+      progress: () => ({ cur: Math.min(Object.values(getSrsData()).filter(c=>c.reps>=4).length, 50), max: 50 }) },
+    // ── Units ──
+    { id:'unit_3',       icon:'📗', name:'Bắt đầu unit',      desc:'Hoàn thành 3 units (≥70%)',
+      check: p => Object.values(p.unitScores||{}).filter(s=>s.pct>=70).length >= 3,
+      progress: p => ({ cur: Math.min(Object.values(p.unitScores||{}).filter(s=>s.pct>=70).length, 3), max: 3 }) },
+    { id:'unit_10',      icon:'📘', name:'Học viên tích cực',  desc:'Hoàn thành 10 units (≥70%)',
+      check: p => Object.values(p.unitScores||{}).filter(s=>s.pct>=70).length >= 10,
+      progress: p => ({ cur: Math.min(Object.values(p.unitScores||{}).filter(s=>s.pct>=70).length, 10), max: 10 }) },
+    { id:'unit_all',     icon:'🎖️', name:'Tốt nghiệp!',        desc:'Hoàn thành cả 23 units (≥70%)',
+      check: p => Object.values(p.unitScores||{}).filter(s=>s.pct>=70).length >= 23,
+      progress: p => ({ cur: Math.min(Object.values(p.unitScores||{}).filter(s=>s.pct>=70).length, 23), max: 23 }) },
+    { id:'unit_perfect', icon:'⭐', name:'Unit hoàn hảo',      desc:'Đạt 100% một bài unit bất kỳ',
+      check: p => Object.values(p.unitScores||{}).some(s=>s.pct===100),
+      progress: p => ({ cur: Object.values(p.unitScores||{}).some(s=>s.pct===100)?1:0, max: 1 }) },
+    // ── Streak ──
+    { id:'streak3',      icon:'🔥', name:'On fire!',           desc:'Streak 3 ngày liên tiếp',
+      check: () => getStreakCount() >= 3,
+      progress: () => ({ cur: Math.min(getStreakCount(), 3), max: 3, unit: 'ngày' }) },
+    { id:'streak7',      icon:'💥', name:'Tuần bất bại',       desc:'Streak 7 ngày liên tiếp',
+      check: () => getStreakCount() >= 7,
+      progress: () => ({ cur: Math.min(getStreakCount(), 7), max: 7, unit: 'ngày' }) },
+    { id:'streak14',     icon:'🌟', name:'Hai tuần liên tục',  desc:'Streak 14 ngày liên tiếp',
+      check: () => getStreakCount() >= 14,
+      progress: () => ({ cur: Math.min(getStreakCount(), 14), max: 14, unit: 'ngày' }) },
+    { id:'streak30',     icon:'👑', name:'Tháng không nghỉ',   desc:'Streak 30 ngày liên tiếp',
+      check: () => getStreakCount() >= 30,
+      progress: () => ({ cur: Math.min(getStreakCount(), 30), max: 30, unit: 'ngày' }) },
+    // ── XP ──
+    { id:'xp500',        icon:'⚡', name:'Năng lượng!',        desc:'Đạt 500 XP',
+      check: () => getXP() >= 500,
+      progress: () => ({ cur: Math.min(getXP(), 500), max: 500, unit: 'XP' }) },
+    { id:'xp2000',       icon:'💎', name:'Chăm chỉ đỉnh',     desc:'Đạt 2000 XP',
+      check: () => getXP() >= 2000,
+      progress: () => ({ cur: Math.min(getXP(), 2000), max: 2000, unit: 'XP' }) },
+    { id:'xp5000',       icon:'🚀', name:'TOEIC Hero',          desc:'Đạt 5000 XP',
+      check: () => getXP() >= 5000,
+      progress: () => ({ cur: Math.min(getXP(), 5000), max: 5000, unit: 'XP' }) },
+    // ── Câu hỏi ──
+    { id:'q100',         icon:'✅', name:'100 câu',             desc:'Trả lời đúng 100 câu',
+      check: p => (p.totalCorrect||0) >= 100,
+      progress: p => ({ cur: Math.min(p.totalCorrect||0, 100), max: 100 }) },
+    { id:'q500',         icon:'🔑', name:'500 câu đúng',        desc:'Trả lời đúng 500 câu',
+      check: p => (p.totalCorrect||0) >= 500,
+      progress: p => ({ cur: Math.min(p.totalCorrect||0, 500), max: 500 }) },
+    { id:'q1000',        icon:'🏅', name:'1000 câu đúng',       desc:'Trả lời đúng 1000 câu',
+      check: p => (p.totalCorrect||0) >= 1000,
+      progress: p => ({ cur: Math.min(p.totalCorrect||0, 1000), max: 1000 }) },
   ];
 
   function getUnlocked() {
@@ -1802,7 +1793,6 @@ const App = (() => {
       newOnes.forEach(a => {
         setTimeout(() => showToast(`🏅 Thành tích mới: ${a.icon} ${a.name}`, '🎉'), 400);
       });
-      if (currentPage === 'stats') renderStatsPage();
     }
   }
 
@@ -1810,29 +1800,57 @@ const App = (() => {
   function setupUnitsPage() {
     const grid = document.getElementById('units-grid');
     if (!grid) return;
-    const srs  = getSrsData();
-    const now  = Date.now();
+    const prog = getProgress();
+    const scores = prog.unitScores || {};
+    const unitsDone = Object.values(scores).filter(s => s.pct >= 70).length;
+
+    // Header thống kê tổng
+    const headerEl = document.getElementById('units-header');
+    if (headerEl) {
+      const totalVocab = DB.vocab.length;
+      const seenVocab  = prog.vocabSeen || 0;
+      headerEl.innerHTML = `
+        <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px">
+          <div class="stat-card" style="flex:1;min-width:120px">
+            <div class="stat-num" style="color:var(--accent)">${unitsDone}/${UNIT_METADATA.length}</div>
+            <div class="stat-label">Units hoàn thành</div>
+          </div>
+          <div class="stat-card" style="flex:1;min-width:120px">
+            <div class="stat-num" style="color:var(--success)">${seenVocab}</div>
+            <div class="stat-label">Từ đã học</div>
+          </div>
+          <div class="stat-card" style="flex:1;min-width:120px">
+            <div class="stat-num">${totalVocab}</div>
+            <div class="stat-label">Tổng từ vựng</div>
+          </div>
+        </div>`;
+    }
 
     grid.innerHTML = UNIT_METADATA.map(unit => {
-      const prog   = getProgress();
-      const scores = prog.unitScores || {};
-      const best   = scores[unit.id];
-      const pct    = best ? best.pct : 0;
-      const done   = pct >= 70;
+      const keywords  = unit.vocab.map(k => k.toLowerCase());
+      const unitVocab = DB.vocab.filter(v => keywords.some(k => v.category.toLowerCase().includes(k)));
+      const best      = scores[unit.id];
+      const pct       = best ? best.pct : 0;
+      const done      = pct >= 70;
+      const staleDate = best ? best.date : null;
+      const daysSince = staleDate ? Math.floor((Date.now() - new Date(staleDate).getTime()) / 864e5) : null;
+      const needReview = daysSince !== null && daysSince >= 7 && !done;
 
       return `<div class="unit-card ${done?'unit-done':''}" onclick="App.showUnitDetail(${unit.id})">
-        <div class="unit-num">Unit ${unit.id}</div>
-        <div class="unit-title">${unit.title}</div>
-        <div class="unit-tags">
-          ${unit.vocab.map(v=>`<span class="unit-tag unit-tag-vocab">📂 ${v}</span>`).join('')}
-          <span class="unit-tag unit-tag-grammar">📝 ${unit.grammar}</span>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+          <div class="unit-num">Unit ${unit.id}</div>
+          ${needReview ? '<span style="font-size:.68rem;background:rgba(245,158,11,.15);color:var(--warning);padding:2px 7px;border-radius:10px;font-weight:700">⏰ Nên ôn lại</span>' : ''}
+          ${done ? '<span style="font-size:.68rem;background:rgba(34,197,94,.12);color:var(--success);padding:2px 7px;border-radius:10px;font-weight:700">✓ Hoàn thành</span>' : ''}
         </div>
-        <div class="unit-progress-wrap">
+        <div class="unit-title">${unit.title}</div>
+        <div style="font-size:.72rem;color:var(--text-muted);margin:4px 0">${unitVocab.length} từ vựng · ${unit.grammar}</div>
+        <div class="unit-progress-wrap" style="margin:8px 0 6px">
           <div class="unit-progress-fill" style="width:${pct}%"></div>
         </div>
         <div class="unit-score-row">
-          <span>${pct > 0 ? `Best: <b class="unit-best-score" style="color:${pct>=80?'var(--success)':pct>=60?'var(--warning)':'var(--danger)'}">${pct}%</b>` : '<span style="color:var(--text-muted)">Chưa làm</span>'}</span>
-          <span>${done ? '<span style="color:var(--success);font-size:.72rem">✓ Hoàn thành</span>' : ''}</span>
+          <span>${pct > 0
+            ? `Best: <b style="color:${pct>=80?'var(--success)':pct>=60?'var(--warning)':'var(--danger)'}">${pct}%</b>${best.date ? ` · ${best.date}` : ''}`
+            : '<span style="color:var(--text-muted)">Chưa làm bài</span>'}</span>
         </div>
       </div>`;
     }).join('');
@@ -1842,42 +1860,80 @@ const App = (() => {
     const unit = UNIT_METADATA.find(u => u.id === unitId);
     if (!unit) return;
 
-    // Get sample vocab words for this unit
-    const keywords = unit.vocab.map(k => k.toLowerCase());
-    const unitVocab = DB.vocab.filter(v =>
-      keywords.some(k => v.category.toLowerCase().includes(k))
-    ).slice(0, 12);
+    const keywords  = unit.vocab.map(k => k.toLowerCase());
+    const unitVocab = DB.vocab.filter(v => keywords.some(k => v.category.toLowerCase().includes(k)));
+    const prog      = getProgress();
+    const scores    = prog.unitScores || {};
+    const best      = scores[unitId];
 
-    const prog   = getProgress();
-    const scores = prog.unitScores || {};
-    const best   = scores[unitId];
+    // Gom từ theo category để hiển thị có nhóm
+    const byCategory = {};
+    unitVocab.forEach(v => {
+      if (!byCategory[v.category]) byCategory[v.category] = [];
+      byCategory[v.category].push(v);
+    });
+
     const bestHtml = best
-      ? `<span style="color:${best.pct>=80?'var(--success)':best.pct>=60?'var(--warning)':'var(--danger)'}">Best: <b>${best.pct}%</b> (${best.correct}/${best.total})</span>`
-      : '<span style="color:var(--text-muted)">Chưa làm</span>';
+      ? `<span style="color:${best.pct>=80?'var(--success)':best.pct>=60?'var(--warning)':'var(--danger)'}">Best: <b>${best.pct}%</b> (${best.correct}/${best.total}) · ${best.date}</span>`
+      : '<span style="color:var(--text-muted)">Chưa làm bài thi Unit này</span>';
 
     const detailEl = document.getElementById('unit-detail');
     detailEl.style.display = 'block';
     detailEl.innerHTML = `
       <div class="unit-detail-panel">
-        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px">
-          <div class="unit-detail-title">Unit ${unitId}: ${unit.title}</div>
-          <button onclick="document.getElementById('unit-detail').style.display='none'" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:1.1rem">✕</button>
+        <!-- Header -->
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:12px">
+          <div>
+            <div class="unit-detail-title">Unit ${unitId}: ${unit.title}</div>
+            <div style="font-size:.78rem;color:var(--text-muted);margin-top:3px">
+              ${unitVocab.length} từ vựng · Ngữ pháp: <b>${unit.grammar}</b>
+            </div>
+          </div>
+          <button onclick="document.getElementById('unit-detail').style.display='none'"
+            style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:1.1rem;flex-shrink:0">✕</button>
         </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
-          ${unit.vocab.map(v=>`<span class="unit-tag unit-tag-vocab">📂 ${v}</span>`).join('')}
-          <span class="unit-tag unit-tag-grammar">📝 Ngữ pháp: ${unit.grammar}</span>
-        </div>
-        ${unitVocab.length ? `
-          <div style="font-size:.75rem;color:var(--text-secondary);font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Từ vựng chủ đề</div>
-          <div class="unit-vocab-preview">${unitVocab.map(v=>`<span class="unit-vocab-chip" title="${v.meaning}">${v.word}</span>`).join('')}</div>
-        ` : ''}
-        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-top:6px">
-          <div style="font-size:.82rem;color:var(--text-muted)">${bestHtml}</div>
+
+        <!-- Điểm & nút hành động -->
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;
+                    background:var(--bg-primary);border:1px solid var(--border);border-radius:10px;
+                    padding:10px 14px;margin-bottom:16px">
+          <div style="font-size:.82rem">${bestHtml}</div>
           <div style="display:flex;gap:8px;flex-wrap:wrap">
-            <button class="btn btn-outline btn-sm" onclick="App.openUnitFlashcard(${unitId})">🃏 Flashcard từ vựng</button>
-            <button class="btn btn-primary btn-sm" onclick="App.startUnitQuizFromPage(${unitId})">▶ Luyện tập Unit ${unitId}</button>
+            <button class="btn btn-outline btn-sm" onclick="App.openUnitFlashcard(${unitId})">🃏 Flashcard</button>
+            <button class="btn btn-primary btn-sm" onclick="App.startUnitQuizFromPage(${unitId})">▶ Luyện tập</button>
           </div>
         </div>
+
+        <!-- Từ vựng đầy đủ theo category -->
+        ${Object.entries(byCategory).map(([cat, words]) => `
+          <div style="margin-bottom:14px">
+            <div style="font-size:.72rem;font-weight:700;color:var(--text-secondary);
+                        text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px;
+                        display:flex;align-items:center;gap:6px">
+              <span style="background:var(--accent);color:#fff;padding:1px 7px;border-radius:10px;font-size:.65rem">${cat}</span>
+              <span style="color:var(--text-muted)">${words.length} từ</span>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:6px">
+              ${words.map(v => `
+                <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:8px;
+                            padding:8px 10px;cursor:pointer;transition:border-color .15s"
+                     onmouseenter="this.style.borderColor='var(--accent)'"
+                     onmouseleave="this.style.borderColor='var(--border)'"
+                     title="${v.example || ''}">
+                  <div style="display:flex;align-items:baseline;gap:6px;margin-bottom:2px">
+                    <span style="font-weight:700;color:var(--text-primary)">${v.word}</span>
+                    <span style="font-size:.7rem;color:var(--text-muted)">${v.type}</span>
+                    ${v.phonetic ? `<span style="font-size:.7rem;color:var(--accent)">${v.phonetic}</span>` : ''}
+                  </div>
+                  <div style="font-size:.78rem;color:var(--text-secondary)">${v.meaning}</div>
+                  ${v.example ? `<div style="font-size:.72rem;color:var(--text-muted);margin-top:3px;
+                                              font-style:italic;border-left:2px solid var(--border);
+                                              padding-left:6px">${v.example}</div>` : ''}
+                </div>`).join('')}
+            </div>
+          </div>`).join('')}
+
+        ${unitVocab.length === 0 ? '<div style="color:var(--text-muted);text-align:center;padding:20px">Chưa có từ vựng cho unit này.</div>' : ''}
       </div>`;
     detailEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
@@ -1902,7 +1958,7 @@ const App = (() => {
   }
 
   function startUnitQuizFromPage(unitId) {
-    _currentUnitId = unitId;
+    // Trigger unit quiz and navigate to practice
     navigate('practice');
     requestAnimationFrame(() => {
       generateUnitQuiz(unitId, undefined);
@@ -1914,103 +1970,168 @@ const App = (() => {
     const el = document.getElementById('stats-content');
     if (!el) return;
 
-    const prog    = getProgress();
-    const sd      = getStreakData();
-    const xp      = getXP();
-    const li      = getLevelInfo(xp);
-    const hist    = sd.history || [];
-    const histSet = new Set(hist);
-    const unlocked = getUnlocked();
+    const prog        = getProgress();
+    const sd          = getStreakData();
+    const xp          = getXP();
+    const li          = getLevelInfo(xp);
+    const histSet     = new Set(sd.history || []);
+    const unlocked    = getUnlocked();
+    const srsAll      = getSrsData();
+    const now         = Date.now();
+    const srsDue      = Object.values(srsAll).filter(c => c.dueDate <= now).length;
+    const unitsDone   = Object.values(prog.unitScores||{}).filter(s => s.pct >= 70).length;
+    const wrongCount  = getWrongIds().size;
+    const totalWrong  = (prog.totalAnswered||0) - (prog.totalCorrect||0);
 
-    // ── Heatmap: last 70 days ──
     const heatDays = Array.from({length:70}, (_,i) => {
       const d = new Date(); d.setDate(d.getDate() - (69-i));
       const str = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-      const isToday = str === todayStr();
-      const active = histSet.has(str);
-      return `<div class="hm-cell ${active?'hm-4':''} ${isToday?'hm-today':''}" title="${str}"></div>`;
+      return `<div class="hm-cell ${histSet.has(str)?'hm-4':''} ${str===todayStr()?'hm-today':''}" title="${str}"></div>`;
     }).join('');
 
-    // ── Weekly bar chart: last 7 weeks quiz count ──
     const weeklyScores = prog.weeklyScores || [];
     const chartBars = weeklyScores.slice(-7).map((s,i) => {
       const maxS = Math.max(...weeklyScores.slice(-7), 1);
-      const h = Math.round(s / maxS * 100);
-      return `<div class="bar-col">
-        <div class="bar-body" style="height:${h}%"></div>
-        <div class="bar-label">T${i+1}</div>
-      </div>`;
-    }).join('') || '<div style="color:var(--text-muted);font-size:.82rem;padding:10px">Chưa có dữ liệu tuần</div>';
+      return `<div class="bar-col"><div class="bar-body" style="height:${Math.round(s/maxS*100)}%"></div><div class="bar-label">T${i+1}</div></div>`;
+    }).join('') || `<div style="color:var(--text-muted);font-size:.82rem;padding:10px">Chưa có dữ liệu</div>`;
 
-    // ── SRS summary ──
-    const srsAll = getSrsData();
-    const srsTotal = Object.keys(srsAll).length;
-    const now = Date.now();
-    const srsDue = Object.values(srsAll).filter(c => c.dueDate <= now).length;
-    const srsMastered = Object.values(srsAll).filter(c => c.reps >= 4).length;
+    function achProg(a) {
+      try { return a.progress ? a.progress(prog) : null; } catch { return null; }
+    }
 
-    // ── Unit completion ──
-    const unitScores = prog.unitScores || {};
-    const unitsDone = Object.values(unitScores).filter(s => s.pct >= 70).length;
+    const groups = [
+      { label: '📝 Luyện tập', ids: ['first_quiz','test10','test30','perfect','acc80'] },
+      { label: '📖 Từ vựng',   ids: ['vocab50','vocab200','vocab500','srs20','srs_master'] },
+      { label: '📗 Units',     ids: ['unit_3','unit_10','unit_all','unit_perfect'] },
+      { label: '🔥 Streak',    ids: ['streak3','streak7','streak14','streak30'] },
+      { label: '⚡ XP',        ids: ['xp500','xp2000','xp5000'] },
+      { label: '✅ Câu hỏi',   ids: ['q100','q500','q1000'] },
+    ];
 
     el.innerHTML = `
-      <!-- Level card -->
       <div class="stats-hero">
         <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
-          <div style="font-size:3rem">${li.level.name.split(' ').pop()}</div>
+          <div style="font-size:2.8rem">${li.level.name.split(' ').pop()}</div>
           <div style="flex:1;min-width:160px">
-            <div style="font-size:1.3rem;font-weight:900">${li.level.name}</div>
-            <div style="font-size:.82rem;color:var(--text-secondary);margin:4px 0">${xp} XP tổng cộng</div>
-            <div class="xp-track" style="max-width:260px"><div class="xp-fill" style="width:${li.pct}%"></div></div>
-            <div style="font-size:.72rem;color:var(--text-muted);margin-top:4px">${li.next ? `${li.next.min - xp} XP đến ${li.next.name}` : '🏆 Cấp độ tối đa!'}</div>
+            <div style="font-size:1.2rem;font-weight:900">${li.level.name}</div>
+            <div style="font-size:.8rem;color:var(--text-secondary);margin:3px 0">${xp} XP</div>
+            <div class="xp-track" style="max-width:240px"><div class="xp-fill" style="width:${li.pct}%"></div></div>
+            <div style="font-size:.7rem;color:var(--text-muted);margin-top:3px">${li.next ? `${li.next.min-xp} XP đến ${li.next.name}` : '🏆 Cấp tối đa!'}</div>
           </div>
           <div style="text-align:center">
-            <div style="font-size:2rem;font-weight:900;color:#fbbf24">${sd.streak||0} 🔥</div>
-            <div style="font-size:.72rem;color:var(--text-muted)">Streak hiện tại</div>
-            <div style="font-size:.78rem;color:var(--text-secondary);margin-top:2px">Best: ${sd.best||0} ngày</div>
+            <div style="font-size:1.8rem;font-weight:900;color:#fbbf24">${sd.streak||0} 🔥</div>
+            <div style="font-size:.7rem;color:var(--text-muted)">Streak · Best: ${sd.best||0} ngày</div>
           </div>
         </div>
       </div>
 
-      <!-- Stats grid -->
+      <div style="font-size:.78rem;font-weight:700;color:var(--text-secondary);
+                  text-transform:uppercase;letter-spacing:.5px;margin:18px 0 10px">📊 Bộ đếm học tập</div>
       <div class="stats-grid">
-        <div class="stats-tile"><div class="stats-tile-num">${prog.vocabSeen||0}</div><div class="stats-tile-label">Từ đã học</div></div>
-        <div class="stats-tile"><div class="stats-tile-num">${prog.testsCompleted||0}</div><div class="stats-tile-label">Bài thi</div></div>
-        <div class="stats-tile"><div class="stats-tile-num">${prog.totalAnswered||0}</div><div class="stats-tile-label">Câu đã làm</div></div>
-        <div class="stats-tile"><div class="stats-tile-num">${prog.accuracy||0}%</div><div class="stats-tile-label">Độ chính xác</div></div>
-        <div class="stats-tile"><div class="stats-tile-num" style="color:#fbbf24">${srsDue}</div><div class="stats-tile-label">Thẻ đến hạn SRS</div></div>
-        <div class="stats-tile"><div class="stats-tile-num" style="color:var(--success)">${srsMastered}</div><div class="stats-tile-label">Thẻ đã thuộc</div></div>
-        <div class="stats-tile"><div class="stats-tile-num">${srsTotal}</div><div class="stats-tile-label">Tổng thẻ SRS</div></div>
-        <div class="stats-tile"><div class="stats-tile-num">${unitsDone}/${UNIT_METADATA.length}</div><div class="stats-tile-label">Units hoàn thành</div></div>
+        <div class="stats-tile">
+          <div class="stats-tile-num" style="color:var(--accent)">${prog.testsCompleted||0}</div>
+          <div class="stats-tile-label">Bài thi đã làm</div>
+        </div>
+        <div class="stats-tile">
+          <div class="stats-tile-num" style="color:var(--success)">${prog.totalCorrect||0}</div>
+          <div class="stats-tile-label">Câu trả lời đúng</div>
+        </div>
+        <div class="stats-tile">
+          <div class="stats-tile-num" style="color:var(--danger)">${totalWrong}</div>
+          <div class="stats-tile-label">Câu trả lời sai</div>
+          ${wrongCount>0 ? `<div style="margin-top:6px">
+            <button class="btn btn-outline btn-sm" onclick="App.startWrongReview()"
+              style="font-size:.7rem;border-color:var(--danger);color:var(--danger)">
+              Ôn ${wrongCount} câu sai
+            </button></div>` : ''}
+        </div>
+        <div class="stats-tile">
+          <div class="stats-tile-num">${prog.totalAnswered||0}</div>
+          <div class="stats-tile-label">Tổng câu đã làm</div>
+        </div>
+        <div class="stats-tile">
+          <div class="stats-tile-num" style="color:var(--accent)">${prog.accuracy||0}%</div>
+          <div class="stats-tile-label">Độ chính xác</div>
+          <div style="margin-top:6px;background:var(--bg-primary);border-radius:4px;height:4px;overflow:hidden">
+            <div style="height:100%;width:${prog.accuracy||0}%;background:var(--accent);border-radius:4px"></div>
+          </div>
+        </div>
+        <div class="stats-tile">
+          <div class="stats-tile-num" style="color:var(--success)">${prog.vocabSeen||0}</div>
+          <div class="stats-tile-label">Từ vựng đã học</div>
+          <div style="margin-top:6px;background:var(--bg-primary);border-radius:4px;height:4px;overflow:hidden">
+            <div style="height:100%;width:${Math.min(100,Math.round((prog.vocabSeen||0)/Math.max(DB.vocab.length,1)*100))}%;background:var(--success);border-radius:4px"></div>
+          </div>
+        </div>
+        <div class="stats-tile">
+          <div class="stats-tile-num">${unitsDone}/${UNIT_METADATA.length}</div>
+          <div class="stats-tile-label">Units hoàn thành</div>
+          <div style="margin-top:6px;background:var(--bg-primary);border-radius:4px;height:4px;overflow:hidden">
+            <div style="height:100%;width:${Math.round(unitsDone/UNIT_METADATA.length*100)}%;background:#8b5cf6;border-radius:4px"></div>
+          </div>
+        </div>
+        <div class="stats-tile">
+          <div class="stats-tile-num" style="color:#fbbf24">${srsDue}</div>
+          <div class="stats-tile-label">Thẻ SRS đến hạn</div>
+          <div style="margin-top:6px;font-size:.7rem;color:${srsDue>0?'var(--warning)':'var(--success)'}">
+            ${srsDue>0 ? '→ Vào Từ vựng để ôn' : '✓ Đã ôn hết'}
+          </div>
+        </div>
       </div>
 
-      <!-- Heatmap -->
       <div class="heatmap-wrap">
         <div class="heatmap-title">📅 Lịch học 70 ngày gần nhất</div>
         <div class="heatmap-grid">${heatDays}</div>
-        <div style="font-size:.72rem;color:var(--text-muted);margin-top:8px">Ô màu = ngày có hoạt động học · Viền vàng = hôm nay</div>
+        <div style="font-size:.7rem;color:var(--text-muted);margin-top:6px">Ô màu = ngày học · Viền vàng = hôm nay</div>
       </div>
 
-      <!-- Weekly bars -->
       <div class="progress-chart-wrap">
-        <div class="heatmap-title">📈 Số bài thi theo tuần</div>
+        <div class="heatmap-title">📈 Bài thi theo tuần</div>
         <div class="bar-chart">${chartBars}</div>
       </div>
 
-      <!-- Achievements -->
-      <div style="font-size:.88rem;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;margin-bottom:14px">🏅 Thành tích (${unlocked.size}/${ACHIEVEMENTS.length})</div>
-      <div class="achievement-grid">
-        ${ACHIEVEMENTS.map(a => `
-          <div class="achievement-card ${unlocked.has(a.id)?'unlocked':'locked'}">
-            <div class="ach-icon">${a.icon}</div>
-            <div>
-              <div class="ach-name">${a.name}</div>
-              <div class="ach-desc">${a.desc}</div>
-            </div>
-          </div>`).join('')}
+      <div style="font-size:.78rem;font-weight:700;color:var(--text-secondary);
+                  text-transform:uppercase;letter-spacing:.5px;margin:20px 0 12px">
+        🏅 Thành tích (${unlocked.size}/${ACHIEVEMENTS.length})
       </div>
-      <div style="text-align:center;margin-top:12px">
-        <button class="btn btn-outline btn-sm" onclick="App.resetAllData()" style="border-color:var(--danger);color:var(--danger);font-size:.75rem">🗑 Xóa toàn bộ dữ liệu</button>
+
+      ${groups.map(g => {
+        const groupAchs = ACHIEVEMENTS.filter(a => g.ids.includes(a.id));
+        return `<div style="margin-bottom:18px">
+          <div style="font-size:.78rem;font-weight:700;color:var(--text-muted);margin-bottom:8px">${g.label}</div>
+          <div class="achievement-grid">
+            ${groupAchs.map(a => {
+              const isUnlocked = unlocked.has(a.id);
+              const pd = achProg(a);
+              const pct = pd ? Math.round(pd.cur/pd.max*100) : 0;
+              const label = pd ? (pd.unit ? `${pd.cur}${pd.unit}/${pd.max}${pd.unit}` : `${pd.cur}/${pd.max}`) : '';
+              return `<div class="achievement-card ${isUnlocked?'unlocked':'locked'}">
+                <div class="ach-icon">${a.icon}</div>
+                <div style="flex:1;min-width:0">
+                  <div class="ach-name">${a.name}</div>
+                  <div class="ach-desc">${a.desc}</div>
+                  ${isUnlocked
+                    ? '<div style="font-size:.65rem;color:var(--success);margin-top:3px">✓ Đã mở khóa</div>'
+                    : pd ? `<div style="margin-top:5px">
+                        <div style="display:flex;justify-content:space-between;font-size:.65rem;color:var(--text-muted);margin-bottom:2px">
+                          <span>${label}</span><span>${pct}%</span>
+                        </div>
+                        <div style="background:var(--bg-primary);border-radius:3px;height:4px;overflow:hidden">
+                          <div style="height:100%;width:${pct}%;background:var(--accent);border-radius:3px"></div>
+                        </div>
+                      </div>` : ''}
+                </div>
+              </div>`;
+            }).join('')}
+          </div>
+        </div>`;
+      }).join('')}
+
+      <div style="text-align:center;margin-top:16px">
+        <button class="btn btn-outline btn-sm" onclick="App.resetAllData()"
+          style="border-color:var(--danger);color:var(--danger);font-size:.75rem">
+          🗑 Xóa toàn bộ dữ liệu
+        </button>
       </div>`;
   }
 
@@ -2075,10 +2196,11 @@ const App = (() => {
     return { year: d.getFullYear(), week };
   }
 
-  // generateUnitQuizTracked — alias giữ tương thích, _currentUnitId được set tại điểm gọi
+  // Monkey-patch generateUnitQuiz to track unit id
+  const _origGenerateUnitQuiz = generateUnitQuiz;
   function generateUnitQuizTracked(unitId, seed) {
     _currentUnitId = unitId;
-    generateUnitQuiz(unitId, seed);
+    _origGenerateUnitQuiz(unitId, seed);
   }
 
   // ─── Hook navigate to render stats/units on page open ─────
