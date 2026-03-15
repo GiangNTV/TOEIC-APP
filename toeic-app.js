@@ -102,11 +102,17 @@ const App = (() => {
 
     setupNav();
     renderHomeDashboard();
+    renderWordOfTheDay();
     setupVocabPage();
     setupGrammarPage();
     setupPracticePage();
     setupHomeworkLogic();
     updateWrongCountUI();
+    // ── Gamification ──
+    recordActivity();
+    renderStreakBanner();
+    // Override flashcard to use SRS
+    document.getElementById('btn-flashcard')?.addEventListener('click', e => { e.stopImmediatePropagation(); openFlashcardSRS(); }, true);
 
     // Update badges
     document.getElementById('badge-vocab').textContent     = `📖 ${DB.vocab.length}+ Từ vựng`;
@@ -225,7 +231,7 @@ const App = (() => {
       });
     });
     document.getElementById('vocab-search').addEventListener('input', renderVocabGrid);
-    document.getElementById('btn-flashcard').addEventListener('click', openFlashcard);
+    // flashcard button is handled by SRS version in init()
     renderVocabGrid();
   }
 
@@ -429,6 +435,368 @@ const App = (() => {
     seen.add(id);
     saveProgress({ vocabSeen: seen.size, vocabSeen_ids: [...seen] });
     document.getElementById('stat-vocab').textContent = seen.size;
+  }
+
+  // ─── Word of the Day ───
+  function renderWordOfTheDay() {
+    if (!DB.vocab || DB.vocab.length === 0) return;
+    // Seed by date so it changes daily but is consistent within a day
+    const today = new Date();
+    const seed = today.getFullYear() * 10000 + (today.getMonth()+1) * 100 + today.getDate();
+    const idx = seed % DB.vocab.length;
+    const v = DB.vocab[idx];
+    const el = id => document.getElementById(id);
+    if (!el('wotd-word')) return;
+    el('wotd-word').textContent    = v.word;
+    el('wotd-phonetic').textContent = v.phonetic;
+    el('wotd-type').textContent    = v.type.toUpperCase();
+    el('wotd-meaning').textContent  = v.meaning;
+    el('wotd-example').textContent  = '"' + v.example + '"';
+    // Mark as seen
+    const prog = getProgress();
+    const seen = new Set(prog.vocabSeen_ids || []);
+    seen.add(v.id);
+    saveProgress({ vocabSeen: seen.size, vocabSeen_ids: [...seen] });
+  }
+
+  // ─── Vocab Quiz (4-choice, TOEIC-style: chọn nghĩa đúng của từ) ───
+  let vqDeck = [], vqIndex = 0, vqCorrect = 0, vqWrong = 0, vqStreak = 0;
+
+  function getVocabDeck() {
+    const search = (document.getElementById('vocab-search')?.value || '').toLowerCase();
+    let pool = DB.vocab.filter(v => {
+      const matchCat = vocabFilter === 'All' || v.category === vocabFilter;
+      const matchSearch = !search || v.word.toLowerCase().includes(search) || v.meaning.toLowerCase().includes(search);
+      return matchCat && matchSearch;
+    });
+    if (pool.length < 4) pool = DB.vocab; // fallback to full list if filter too narrow
+    return pool;
+  }
+
+  function openVocabQuiz() {
+    const pool = getVocabDeck();
+    if (pool.length < 4) { showToast('Cần ít nhất 4 từ để chơi Quiz.', '⚠️'); return; }
+    vqDeck = shuffleArray([...pool]);
+    vqIndex = 0; vqCorrect = 0; vqWrong = 0; vqStreak = 0;
+    document.getElementById('vquiz-overlay').style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+    renderVqCard();
+  }
+
+  function closeVocabQuiz() {
+    document.getElementById('vquiz-overlay').style.display = 'none';
+    document.body.style.overflow = '';
+    if (vqCorrect + vqWrong > 0) showToast(`Quiz: ${vqCorrect} đúng · ${vqWrong} sai · Streak tốt nhất`, '❓');
+  }
+
+  function renderVqCard() {
+    if (vqIndex >= vqDeck.length) {
+      // Restart shuffled
+      vqDeck = shuffleArray([...vqDeck]);
+      vqIndex = 0;
+    }
+    const v = vqDeck[vqIndex];
+    const pool = vqDeck;
+
+    // 4 options: 1 correct + 3 random distractors from same category if possible, else random
+    let distractors = pool.filter(x => x.id !== v.id && x.category === v.category);
+    if (distractors.length < 3) distractors = pool.filter(x => x.id !== v.id);
+    shuffleArray(distractors);
+    const wrongOpts = distractors.slice(0, 3).map(x => x.meaning);
+    const allOpts = shuffleArray([v.meaning, ...wrongOpts]);
+    const correctIdx = allOpts.indexOf(v.meaning);
+
+    // Update header
+    document.getElementById('vq-category').textContent = v.category;
+    document.getElementById('vq-progress').textContent = `${vqIndex + 1} / ${vqDeck.length}`;
+    const pct = Math.round(vqIndex / vqDeck.length * 100);
+    document.getElementById('vq-progress-bar').style.width = pct + '%';
+
+    // Card content
+    document.getElementById('vq-word').textContent     = v.word;
+    document.getElementById('vq-phonetic').textContent = v.phonetic;
+    document.getElementById('vq-type').textContent     = v.type.toUpperCase();
+
+    const letters = ['A','B','C','D'];
+    document.getElementById('vq-options').innerHTML = allOpts.map((opt, i) =>
+      `<button class="vquiz-opt" onclick="App.vqSelect(${i},${correctIdx})">
+         <span class="opt-letter">${letters[i]}</span><span>${opt}</span>
+       </button>`
+    ).join('');
+
+    document.getElementById('vq-result-box').style.display  = 'none';
+    document.getElementById('vq-example-box').style.display = 'none';
+    document.getElementById('vq-next-wrap').style.display   = 'none';
+    updateVqStats();
+
+    // Mark seen
+    const prog = getProgress();
+    const seen = new Set(prog.vocabSeen_ids || []);
+    seen.add(v.id);
+    saveProgress({ vocabSeen: seen.size, vocabSeen_ids: [...seen] });
+    document.getElementById('stat-vocab').textContent = seen.size;
+  }
+
+  function vqSelect(chosen, correct) {
+    const opts = document.querySelectorAll('#vq-options .vquiz-opt');
+    opts.forEach(btn => btn.disabled = true);
+    const v = vqDeck[vqIndex];
+    const isRight = chosen === correct;
+    opts[chosen].classList.add(isRight ? 'opt-correct' : 'opt-wrong');
+    if (!isRight) opts[correct].classList.add('opt-correct');
+
+    if (isRight) { vqCorrect++; vqStreak++; } else { vqWrong++; vqStreak = 0; }
+
+    const rb = document.getElementById('vq-result-box');
+    rb.className = 'vquiz-result-box ' + (isRight ? 'result-correct' : 'result-wrong');
+    rb.innerHTML = isRight
+      ? `✅ <strong>Chính xác!</strong> <em>${v.word}</em> = ${v.meaning}`
+      : `❌ <strong>Chưa đúng.</strong> Đáp án: <strong style="color:var(--success)">${v.meaning}</strong>`;
+    rb.style.display = 'block';
+
+    const eb = document.getElementById('vq-example-box');
+    eb.innerHTML = `📝 <em>"${v.example}"</em>`;
+    eb.style.display = 'block';
+
+    document.getElementById('vq-next-wrap').style.display = 'block';
+    updateVqStats();
+
+    // Save to fcReview if wrong
+    if (!isRight) {
+      const prog = getProgress();
+      const review = new Set(prog.fcReview_ids || []);
+      review.add(v.id);
+      saveProgress({ fcReview_ids: [...review] });
+    }
+  }
+
+  function vqNext() {
+    vqIndex++;
+    renderVqCard();
+  }
+
+  function updateVqStats() {
+    const c = document.getElementById('vq-correct');
+    const w = document.getElementById('vq-wrong');
+    const s = document.getElementById('vq-streak');
+    if (c) c.textContent = vqCorrect;
+    if (w) w.textContent = vqWrong;
+    if (s) s.textContent = vqStreak;
+  }
+
+  // ─── Vocab Fill-in-the-Blank (TOEIC Part 5 cảm giác: câu ví dụ, chọn từ đúng) ───
+  let vfDeck = [], vfIndex = 0, vfCorrect = 0, vfWrong = 0;
+
+  function openVocabFill() {
+    const pool = getVocabDeck().filter(v => v.example && v.example.includes(v.word));
+    if (pool.length < 4) { showToast('Không đủ câu ví dụ cho chế độ này.', '⚠️'); return; }
+    vfDeck = shuffleArray([...pool]);
+    vfIndex = 0; vfCorrect = 0; vfWrong = 0;
+    document.getElementById('vfill-overlay').style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+    renderVfCard();
+  }
+
+  function closeVocabFill() {
+    document.getElementById('vfill-overlay').style.display = 'none';
+    document.body.style.overflow = '';
+    if (vfCorrect + vfWrong > 0) showToast(`Điền từ: ${vfCorrect} đúng · ${vfWrong} sai`, '✏️');
+  }
+
+  function renderVfCard() {
+    if (vfIndex >= vfDeck.length) {
+      vfDeck = shuffleArray([...vfDeck]);
+      vfIndex = 0;
+    }
+    const v = vfDeck[vfIndex];
+    // Replace target word with blank in the example sentence
+    const regex = new RegExp(v.word.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&'), 'i');
+    const blankedSentence = v.example.replace(regex,
+      `<span class="vfill-blank">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>`);
+
+    // Build 4 options: the correct word + 3 distractors from same category
+    let distractors = vfDeck.filter(x => x.id !== v.id && x.category === v.category);
+    if (distractors.length < 3) distractors = vfDeck.filter(x => x.id !== v.id);
+    shuffleArray(distractors);
+    const wrongOpts = distractors.slice(0, 3).map(x => x.word);
+    const allOpts = shuffleArray([v.word, ...wrongOpts]);
+    const correctIdx = allOpts.indexOf(v.word);
+
+    document.getElementById('vf-category').textContent  = v.category;
+    document.getElementById('vf-progress').textContent  = `${vfIndex + 1} / ${vfDeck.length}`;
+    document.getElementById('vf-progress-bar').style.width = Math.round(vfIndex / vfDeck.length * 100) + '%';
+    document.getElementById('vf-sentence').innerHTML    = blankedSentence;
+    document.getElementById('vf-phonetic-hint').textContent = v.phonetic + ' [' + v.type + ']';
+    document.getElementById('vf-result-box').style.display  = 'none';
+    document.getElementById('vf-next-wrap').style.display   = 'none';
+
+    const letters = ['A','B','C','D'];
+    document.getElementById('vf-options').innerHTML = allOpts.map((opt, i) =>
+      `<button class="vquiz-opt" onclick="App.vfSelect(${i},${correctIdx})">
+         <span class="opt-letter">${letters[i]}</span><span>${opt}</span>
+       </button>`
+    ).join('');
+    document.getElementById('vf-correct').textContent = vfCorrect;
+    document.getElementById('vf-wrong').textContent   = vfWrong;
+
+    // Mark seen
+    const prog = getProgress();
+    const seen = new Set(prog.vocabSeen_ids || []);
+    seen.add(v.id);
+    saveProgress({ vocabSeen: seen.size, vocabSeen_ids: [...seen] });
+    document.getElementById('stat-vocab').textContent = seen.size;
+  }
+
+  function vfSelect(chosen, correct) {
+    const opts = document.querySelectorAll('#vf-options .vquiz-opt');
+    opts.forEach(btn => btn.disabled = true);
+    const v = vfDeck[vfIndex];
+    const isRight = chosen === correct;
+    opts[chosen].classList.add(isRight ? 'opt-correct' : 'opt-wrong');
+    if (!isRight) opts[correct].classList.add('opt-correct');
+
+    if (isRight) { vfCorrect++; } else { vfWrong++; }
+
+    // Reveal full sentence with answer filled in
+    document.getElementById('vf-sentence').innerHTML =
+      v.example.replace(new RegExp(v.word.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&'), 'i'),
+        `<strong style="color:${isRight ? 'var(--success)' : 'var(--danger)'}; font-style:normal;">${v.word}</strong>`);
+
+    const rb = document.getElementById('vf-result-box');
+    rb.className = 'vquiz-result-box ' + (isRight ? 'result-correct' : 'result-wrong');
+    rb.innerHTML = isRight
+      ? `✅ <strong>Đúng!</strong> ${v.word} — ${v.meaning}`
+      : `❌ <strong>Chưa đúng.</strong> Từ cần điền: <strong style="color:var(--success)">${v.word}</strong> (${v.meaning})`;
+    rb.style.display = 'block';
+    document.getElementById('vf-next-wrap').style.display = 'block';
+    document.getElementById('vf-correct').textContent = vfCorrect;
+    document.getElementById('vf-wrong').textContent   = vfWrong;
+
+    if (!isRight) {
+      const prog = getProgress();
+      const review = new Set(prog.fcReview_ids || []);
+      review.add(v.id);
+      saveProgress({ fcReview_ids: [...review] });
+    }
+  }
+
+  function vfNext() {
+    vfIndex++;
+    renderVfCard();
+  }
+
+  // ─── Vocab Matching Game (ghép cặp từ ↔ nghĩa) ───
+  let vmPool = [], vmPairs = [], vmSelectedLeft = null, vmSelectedRight = null;
+  let vmMatched = 0, vmErrors = 0, vmRound = 0, vmTotalPairs = 0;
+  const VM_PAIRS_PER_ROUND = 6;
+
+  function openVocabMatch() {
+    vmPool = shuffleArray([...getVocabDeck()]);
+    vmRound = 0; vmMatched = 0; vmErrors = 0;
+    document.getElementById('vmatch-overlay').style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+    vmNewRound();
+  }
+
+  function closeVocabMatch() {
+    document.getElementById('vmatch-overlay').style.display = 'none';
+    document.body.style.overflow = '';
+    if (vmMatched > 0) showToast(`Ghép cặp: ${vmMatched} cặp đúng · ${vmErrors} lỗi`, '🔗');
+  }
+
+  function vmNewRound() {
+    vmRound++;
+    const startIdx = ((vmRound - 1) * VM_PAIRS_PER_ROUND) % vmPool.length;
+    vmPairs = [];
+    for (let i = 0; i < VM_PAIRS_PER_ROUND; i++) {
+      vmPairs.push(vmPool[(startIdx + i) % vmPool.length]);
+    }
+    vmSelectedLeft = null; vmSelectedRight = null;
+    vmTotalPairs = vmPairs.length;
+
+    document.getElementById('vm-round').textContent   = `Vòng ${vmRound}`;
+    document.getElementById('vm-matched').textContent = vmMatched;
+    document.getElementById('vm-total-pairs').textContent = vmTotalPairs * vmRound - vmTotalPairs + vmTotalPairs;
+    document.getElementById('vm-errors').textContent  = vmErrors;
+    document.getElementById('vm-result').style.display  = 'none';
+    document.getElementById('vm-stats-row').style.display = 'flex';
+
+    const leftWords   = shuffleArray(vmPairs.map((v, i) => ({ id: i, text: v.word,    side: 'left'  })));
+    const rightMeanings = shuffleArray(vmPairs.map((v, i) => ({ id: i, text: v.meaning, side: 'right' })));
+
+    // Mark vocab seen
+    const prog = getProgress();
+    const seen = new Set(prog.vocabSeen_ids || []);
+    vmPairs.forEach(v => seen.add(v.id));
+    saveProgress({ vocabSeen: seen.size, vocabSeen_ids: [...seen] });
+    document.getElementById('stat-vocab').textContent = seen.size;
+
+    const board = document.getElementById('vm-board');
+    board.innerHTML = `
+      <div class="vmatch-col" id="vm-col-left">
+        ${leftWords.map(item =>
+          `<div class="vmatch-tile" data-id="${item.id}" data-side="left" onclick="App.vmTileClick(this)">${item.text}</div>`
+        ).join('')}
+      </div>
+      <div class="vmatch-col" id="vm-col-right">
+        ${rightMeanings.map(item =>
+          `<div class="vmatch-tile" data-id="${item.id}" data-side="right" onclick="App.vmTileClick(this)">${item.text}</div>`
+        ).join('')}
+      </div>`;
+  }
+
+  function vmTileClick(tile) {
+    if (tile.classList.contains('matched')) return;
+    const side = tile.dataset.side;
+    const id   = parseInt(tile.dataset.id);
+
+    if (side === 'left') {
+      // Deselect previous left selection
+      document.querySelectorAll('#vm-col-left .vmatch-tile.selected').forEach(t => t.classList.remove('selected'));
+      tile.classList.add('selected');
+      vmSelectedLeft = id;
+    } else {
+      document.querySelectorAll('#vm-col-right .vmatch-tile.selected').forEach(t => t.classList.remove('selected'));
+      tile.classList.add('selected');
+      vmSelectedRight = id;
+    }
+
+    if (vmSelectedLeft !== null && vmSelectedRight !== null) {
+      if (vmSelectedLeft === vmSelectedRight) {
+        // Correct match
+        vmMatched++;
+        const lTile = document.querySelector(`#vm-col-left .vmatch-tile[data-id="${vmSelectedLeft}"]`);
+        const rTile = document.querySelector(`#vm-col-right .vmatch-tile[data-id="${vmSelectedRight}"]`);
+        if (lTile) { lTile.classList.remove('selected'); lTile.classList.add('matched'); }
+        if (rTile) { rTile.classList.remove('selected'); rTile.classList.add('matched'); }
+        vmSelectedLeft = null; vmSelectedRight = null;
+        document.getElementById('vm-matched').textContent = vmMatched;
+
+        // Check if round complete
+        const remaining = document.querySelectorAll('#vm-board .vmatch-tile:not(.matched)').length;
+        if (remaining === 0) {
+          setTimeout(() => {
+            document.getElementById('vm-result').style.display = 'block';
+            document.getElementById('vm-stats-row').style.display = 'none';
+            document.getElementById('vm-score-msg').textContent =
+              `${vmMatched} cặp đúng · ${vmErrors} lỗi · Tiếp tục vòng ${vmRound + 1}?`;
+          }, 400);
+        }
+      } else {
+        // Wrong
+        vmErrors++;
+        document.getElementById('vm-errors').textContent = vmErrors;
+        const lTile = document.querySelector(`#vm-col-left .vmatch-tile[data-id="${vmSelectedLeft}"]`);
+        const rTile = document.querySelector(`#vm-col-right .vmatch-tile[data-id="${vmSelectedRight}"]`);
+        if (lTile) lTile.classList.add('error-flash');
+        if (rTile) rTile.classList.add('error-flash');
+        setTimeout(() => {
+          if (lTile) { lTile.classList.remove('error-flash', 'selected'); }
+          if (rTile) { rTile.classList.remove('error-flash', 'selected'); }
+        }, 350);
+        vmSelectedLeft = null; vmSelectedRight = null;
+      }
+    }
   }
 
   // ─── Grammar Page ───
@@ -645,7 +1013,7 @@ const App = (() => {
     clearInterval(quizTimer);
     const pct = Math.round(quizScore / total * 100);
     markQuestionsAnswered(quizQuestions, quizUserAnswers);
-    updateProgress(quizScore, total);
+    updateProgressGamified(quizScore, total);
 
     document.getElementById('quiz-container').style.display    = 'none';
     document.getElementById('results-container').style.display = 'block';
@@ -717,6 +1085,7 @@ const App = (() => {
     // Định dạng chuẩn: HW-UNIT-{unitId}-{seed}
     const match = code.match(/HW-UNIT-(\d+)-(\d+)/i);
     if (match) {
+      _currentUnitId = parseInt(match[1]);
       generateUnitQuiz(parseInt(match[1]), parseInt(match[2]));
     } else {
       const fallback = code.match(/HW-UNIT-(\d+)/i);
@@ -984,6 +1353,667 @@ const App = (() => {
 
 
 
+  // ═══════════════════════════════════════════════════════════
+  //   GAMIFICATION MODULE
+  //   1) Spaced Repetition (SM-2 lite) for Flashcards
+  //   2) Unit Learning page
+  //   3) Stats / Streak / XP / Achievements
+  // ═══════════════════════════════════════════════════════════
+
+  // ─── SRS: SM-2 lite ───────────────────────────────────────
+  // Each card stores: { interval, easeFactor, dueDate, reps }
+  // interval in days; easeFactor default 2.5
+
+  const SRS_DEFAULT_EF = 2.5;
+  const SRS_MIN_EF     = 1.3;
+
+  function getSrsData() {
+    try { return JSON.parse(localStorage.getItem('toeic_srs') || '{}'); }
+    catch { return {}; }
+  }
+  function saveSrsData(data) {
+    localStorage.setItem('toeic_srs', JSON.stringify(data));
+  }
+
+  // quality: 0=Again, 3=Hard, 4=Good, 5=Easy
+  function srsRate(vocabId, quality) {
+    const srs = getSrsData();
+    const now = Date.now();
+    const c   = srs[vocabId] || { interval: 1, ef: SRS_DEFAULT_EF, dueDate: now, reps: 0 };
+
+    let { interval, ef, reps } = c;
+    if (quality < 3) {
+      // Forgot → reset
+      interval = 1; reps = 0;
+    } else {
+      reps++;
+      if (reps === 1) interval = 1;
+      else if (reps === 2) interval = 3;
+      else interval = Math.round(interval * ef);
+      ef = ef + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02));
+      if (ef < SRS_MIN_EF) ef = SRS_MIN_EF;
+    }
+
+    srs[vocabId] = { interval, ef, reps, dueDate: now + interval * 864e5, lastReview: now };
+    saveSrsData(srs);
+    return interval;
+  }
+
+  function srsGetStatus(vocabId) {
+    const srs = getSrsData();
+    const c = srs[vocabId];
+    if (!c) return 'new';
+    const now = Date.now();
+    if (c.dueDate <= now) return 'due';
+    if (c.reps >= 4) return 'known';
+    return 'review';
+  }
+
+  function srsDueCount() {
+    const srs = getSrsData();
+    const now = Date.now();
+    return DB.vocab.filter(v => {
+      const c = srs[v.id];
+      return c && c.dueDate <= now;
+    }).length;
+  }
+
+  function srsNewCount() {
+    const srs = getSrsData();
+    return DB.vocab.filter(v => !srs[v.id]).length;
+  }
+
+  // Build SRS-sorted deck: due first, then new, then review, then known
+  function buildSrsDeck(pool) {
+    const srs = getSrsData();
+    const now = Date.now();
+    const due    = pool.filter(v => { const c=srs[v.id]; return c && c.dueDate <= now; });
+    const newW   = pool.filter(v => !srs[v.id]);
+    const review = pool.filter(v => { const c=srs[v.id]; return c && c.dueDate > now && c.reps < 4; });
+    const known  = pool.filter(v => { const c=srs[v.id]; return c && c.reps >= 4 && c.dueDate > now; });
+    [due,newW,review,known].forEach(shuffleArray);
+    return [...due, ...newW, ...review, ...known];
+  }
+
+  // ─── Override rateCard to integrate SRS ───────────────────
+  const _origRateCard = rateCard;  // keep reference... we redefine below after SRS is ready
+
+  // We patch rateCard (already defined above) by wrapping via openFlashcard rebuild
+  // Instead, we override the SRS rating inside rateCard:
+  function rateCardSRS(rating) {
+    const v = fcDeck[fcIndex];
+    if (!v) return;
+    // Map rating to SRS quality
+    const quality = rating === 'right' ? 4 : rating === 'easy' ? 5 : 1;
+    const nextDays = srsRate(v.id, quality);
+
+    if (rating === 'right' || rating === 'easy') {
+      fcKnown++;
+      const prog = getProgress();
+      const known = new Set(prog.fcKnown_ids || []);
+      known.add(v.id);
+      saveProgress({ fcKnown_ids: [...known] });
+      // XP for correct
+      const xpAmt = rating === 'easy' ? 3 : 2;
+      addXP(xpAmt, v.id + '-fc');
+      if (nextDays > 1) showToast(`📅 Ôn lại sau ${nextDays} ngày`, '🧠');
+    } else {
+      fcReview++;
+      const prog = getProgress();
+      const review = new Set(prog.fcReview_ids || []);
+      review.add(v.id);
+      saveProgress({ fcReview_ids: [...review] });
+    }
+    updateFcStats();
+    fcIndex++;
+    setTimeout(renderFcCard, 180);
+  }
+
+  // ─── Patch openFlashcard to use SRS-sorted deck ────────────
+  function openFlashcardSRS() {
+    const search = (document.getElementById('vocab-search')?.value || '').toLowerCase();
+    let pool = DB.vocab.filter(v => {
+      const matchCat    = vocabFilter === 'All' || v.category === vocabFilter;
+      const matchSearch = !search || v.word.toLowerCase().includes(search) || v.meaning.toLowerCase().includes(search);
+      return matchCat && matchSearch;
+    });
+    if (pool.length === 0) { showToast('Không có từ nào để luyện.', '⚠️'); return; }
+
+    fcDeck = buildSrsDeck(pool);
+    fcIndex = 0; fcKnown = 0; fcReview = 0; fcSkip = 0; fcFlipped = false;
+
+    const overlay = document.getElementById('flashcard-overlay');
+    overlay.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+    renderFcCardSRS();
+  }
+
+  function renderFcCardSRS() {
+    if (fcIndex >= fcDeck.length) { showFcComplete(); return; }
+    const v = fcDeck[fcIndex];
+    fcFlipped = false;
+
+    const inner   = document.getElementById('fc-inner');
+    const actions = document.getElementById('fc-actions');
+    if (inner)   inner.classList.remove('flipped');
+    if (actions) actions.style.display = 'none';
+
+    // SRS status badge
+    const status = srsGetStatus(v.id);
+    const statusBadge = {
+      new:    '<span class="srs-badge srs-new">🆕 Mới</span>',
+      due:    '<span class="srs-badge srs-due">⏰ Đến hạn</span>',
+      review: '<span class="srs-badge srs-review">🔄 Ôn tập</span>',
+      known:  '<span class="srs-badge srs-known">✓ Thuộc</span>',
+    }[status] || '';
+
+    document.getElementById('fc-word').innerHTML    = v.word + statusBadge;
+    document.getElementById('fc-phonetic').textContent = v.phonetic;
+    document.getElementById('fc-type').textContent     = v.type.toUpperCase();
+    document.getElementById('fc-meaning').textContent  = v.meaning;
+    document.getElementById('fc-example').textContent  = '"' + v.example + '"';
+    document.getElementById('fc-category-label').textContent = v.category;
+
+    // SRS queue bar in header: show due/new/review counts
+    const srs = getSrsData(); const now = Date.now();
+    const remaining = fcDeck.slice(fcIndex);
+    const dueN  = remaining.filter(x => { const c=srs[x.id]; return c && c.dueDate<=now; }).length;
+    const newN  = remaining.filter(x => !srs[x.id]).length;
+    const revN  = remaining.length - dueN - newN;
+    const progressEl = document.getElementById('fc-progress-text');
+    if (progressEl) progressEl.innerHTML =
+      `${fcIndex + 1}/${fcDeck.length} &nbsp;`
+      + (dueN  ? `<span style="color:var(--danger);font-size:.68rem">⏰${dueN}</span> ` : '')
+      + (newN  ? `<span style="color:var(--accent-3);font-size:.68rem">🆕${newN}</span> ` : '')
+      + (revN  ? `<span style="color:#fbbf24;font-size:.68rem">🔄${revN}</span>` : '');
+
+    const pct = Math.round(fcIndex / fcDeck.length * 100);
+    document.getElementById('fc-progress-bar').style.width = pct + '%';
+    updateFcStats();
+
+    // Show 3-button rating row (Again / Good / Easy) after flip
+    const actionsEl = document.getElementById('fc-actions');
+    if (actionsEl) actionsEl.innerHTML = `
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+        <button class="btn" style="background:rgba(244,63,94,.18);border:1px solid var(--danger);color:var(--danger);font-size:.8rem" onclick="App.rateCardSRS('wrong')">😓 Chưa nhớ</button>
+        <button class="btn" style="background:rgba(79,142,247,.15);border:1px solid var(--accent);color:var(--accent);font-size:.8rem" onclick="App.rateCardSRS('right')">👍 Nhớ rồi</button>
+        <button class="btn" style="background:rgba(16,185,129,.12);border:1px solid var(--success);color:var(--success);font-size:.8rem" onclick="App.rateCardSRS('easy')">⚡ Dễ quá!</button>
+      </div>
+      <button class="btn btn-outline btn-sm" onclick="App.skipCard()" style="width:100%;margin-top:10px;font-size:.8rem;color:var(--text-muted)">Bỏ qua →</button>`;
+
+    // Mark vocab as seen
+    const prog = getProgress();
+    const seen = new Set(prog.vocabSeen_ids || []);
+    seen.add(v.id);
+    saveProgress({ vocabSeen: seen.size, vocabSeen_ids: [...seen] });
+    document.getElementById('stat-vocab').textContent = seen.size;
+  }
+
+  // ─── XP & Level System ────────────────────────────────────
+  const XP_LEVELS = [
+    { name:'Beginner 🌱',   min:0    },
+    { name:'Learner 📖',    min:100  },
+    { name:'Student 🎒',   min:250  },
+    { name:'Scholar 🏫',   min:500  },
+    { name:'Expert 🎯',    min:900  },
+    { name:'Master 🏆',    min:1500 },
+    { name:'Champion 💎',  min:2500 },
+    { name:'TOEIC Pro 🚀', min:4000 },
+  ];
+
+  function getXP() {
+    try { return parseInt(localStorage.getItem('toeic_xp') || '0', 10); }
+    catch { return 0; }
+  }
+  function saveXP(val) { localStorage.setItem('toeic_xp', String(val)); }
+  const _xpGiven = new Set(); // prevent duplicate XP in same session
+
+  function addXP(amount, key = '') {
+    if (key && _xpGiven.has(key)) return;
+    if (key) _xpGiven.add(key);
+    const newXP = getXP() + amount;
+    saveXP(newXP);
+    showXpPopup('+' + amount + ' XP');
+    renderXpBar();
+    checkAchievements();
+  }
+
+  function showXpPopup(text) {
+    const el = document.createElement('div');
+    el.className = 'xp-popup';
+    el.textContent = text;
+    // Position near XP bar
+    const bar = document.getElementById('xp-bar-wrap');
+    const rect = bar ? bar.getBoundingClientRect() : { left: window.innerWidth/2, top: window.innerHeight/2 };
+    el.style.left = (rect.left + rect.width/2 - 20) + 'px';
+    el.style.top  = (rect.top + window.scrollY - 10) + 'px';
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), 1300);
+  }
+
+  function getLevelInfo(xp) {
+    let level = XP_LEVELS[0];
+    for (const l of XP_LEVELS) { if (xp >= l.min) level = l; }
+    const idx  = XP_LEVELS.indexOf(level);
+    const next = XP_LEVELS[idx + 1] || null;
+    const pct  = next ? Math.round((xp - level.min) / (next.min - level.min) * 100) : 100;
+    return { level, next, pct, xp };
+  }
+
+  // ─── Streak System ────────────────────────────────────────
+  function getStreakData() {
+    try { return JSON.parse(localStorage.getItem('toeic_streak') || '{}'); }
+    catch { return {}; }
+  }
+  function saveStreakData(d) { localStorage.setItem('toeic_streak', JSON.stringify(d)); }
+
+  function todayStr() {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  }
+
+  function recordActivity() {
+    const today = todayStr();
+    const sd    = getStreakData();
+    if (sd.lastDay === today) return; // already recorded today
+
+    // Build history array
+    const hist = sd.history || [];
+    const yesterday = new Date(); yesterday.setDate(yesterday.getDate()-1);
+    const yStr = `${yesterday.getFullYear()}-${String(yesterday.getMonth()+1).padStart(2,'0')}-${String(yesterday.getDate()).padStart(2,'0')}`;
+
+    const streak = sd.lastDay === yStr ? (sd.streak || 0) + 1 : 1;
+    hist.push(today);
+    // Keep last 90 days
+    const trimmed = hist.slice(-90);
+    saveStreakData({ streak, lastDay: today, history: trimmed, best: Math.max(streak, sd.best || 0) });
+    // XP for streak
+    addXP(streak >= 7 ? 10 : streak >= 3 ? 5 : 2, 'streak-' + today);
+    if (streak >= 3 && streak % 3 === 0) showToast(`🔥 ${streak} ngày liên tiếp! Tuyệt vời!`, '🎉');
+    renderStreakBanner();
+  }
+
+  function getStreakCount() {
+    return getStreakData().streak || 0;
+  }
+
+  // ─── Render Streak + XP Banner (home page) ─────────────────
+  function renderStreakBanner() {
+    const wrap = document.getElementById('streak-xp-wrap');
+    if (!wrap) return;
+    const sd   = getStreakData();
+    const streak = sd.streak || 0;
+    const hist   = sd.history || [];
+    const histSet = new Set(hist);
+
+    // Last 7 days dots
+    const dots = Array.from({length:7}, (_,i) => {
+      const d = new Date(); d.setDate(d.getDate() - (6-i));
+      const str = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+      const day = ['CN','T2','T3','T4','T5','T6','T7'][d.getDay()];
+      const isToday = str === todayStr();
+      const done    = histSet.has(str);
+      return `<div class="streak-dot ${done?'done':''} ${isToday?'today':''}" title="${str}">${day}</div>`;
+    }).join('');
+
+    const xp  = getXP();
+    const li  = getLevelInfo(xp);
+    const lvlEmoji = li.level.name.split(' ').pop();
+
+    wrap.innerHTML = `
+      <div class="streak-banner">
+        <div class="streak-fire">🔥</div>
+        <div class="streak-info">
+          <div class="streak-count">${streak}</div>
+          <div class="streak-sub">Ngày streak · Best: ${sd.best||0}</div>
+        </div>
+        <div>
+          <div class="streak-dots">${dots}</div>
+          <div style="font-size:.68rem;color:var(--text-muted);margin-top:5px">7 ngày gần nhất</div>
+        </div>
+      </div>
+      <div class="xp-bar-wrap" id="xp-bar-wrap">
+        <div class="xp-avatar">${lvlEmoji}</div>
+        <div class="xp-details">
+          <div class="xp-level-row">
+            <span class="xp-level-name">${li.level.name}</span>
+            <span class="xp-pts">${xp} XP</span>
+          </div>
+          <div class="xp-track"><div class="xp-fill" style="width:${li.pct}%"></div></div>
+          <div class="xp-next">${li.next ? `${li.next.min - xp} XP đến ${li.next.name}` : '🏆 Cấp độ tối đa!'}</div>
+        </div>
+      </div>`;
+  }
+
+  function renderXpBar() {
+    // Re-render just the XP portion without rebuilding streak
+    renderStreakBanner();
+  }
+
+  // ─── Achievements ─────────────────────────────────────────
+  const ACHIEVEMENTS = [
+    { id:'first_quiz',   icon:'🎯', name:'Bắt đầu học',    desc:'Hoàn thành bài thi đầu tiên',   check: p => (p.testsCompleted||0) >= 1 },
+    { id:'streak3',      icon:'🔥', name:'On fire!',        desc:'Streak 3 ngày liên tiếp',        check: () => getStreakCount() >= 3 },
+    { id:'streak7',      icon:'💥', name:'Tuần bất bại',    desc:'Streak 7 ngày liên tiếp',        check: () => getStreakCount() >= 7 },
+    { id:'vocab50',      icon:'📖', name:'Từ vựng cơ bản',  desc:'Học 50 từ vựng',                 check: p => (p.vocabSeen||0) >= 50 },
+    { id:'vocab200',     icon:'📚', name:'Từ điển nhỏ',     desc:'Học 200 từ vựng',                check: p => (p.vocabSeen||0) >= 200 },
+    { id:'acc80',        icon:'🎓', name:'Chính xác cao',   desc:'Độ chính xác ≥ 80%',             check: p => (p.accuracy||0) >= 80 },
+    { id:'test10',       icon:'✏️', name:'Luyện tập chăm',  desc:'Hoàn thành 10 bài thi',          check: p => (p.testsCompleted||0) >= 10 },
+    { id:'xp500',        icon:'⚡', name:'Năng lượng!',     desc:'Đạt 500 XP',                     check: () => getXP() >= 500 },
+    { id:'xp2000',       icon:'💎', name:'Chăm chỉ đỉnh',  desc:'Đạt 2000 XP',                    check: () => getXP() >= 2000 },
+    { id:'srs20',        icon:'🧠', name:'Trí nhớ sắt',     desc:'Hoàn thành 20 thẻ SRS',          check: () => Object.keys(getSrsData()).length >= 20 },
+    { id:'perfect',      icon:'🏆', name:'Hoàn hảo',        desc:'Đạt 100% một bài thi',           check: p => (p.hasPerfect||false) },
+  ];
+
+  function getUnlocked() {
+    try { return new Set(JSON.parse(localStorage.getItem('toeic_ach') || '[]')); }
+    catch { return new Set(); }
+  }
+  function saveUnlocked(set) { localStorage.setItem('toeic_ach', JSON.stringify([...set])); }
+
+  function checkAchievements() {
+    const prog     = getProgress();
+    const unlocked = getUnlocked();
+    let newOnes    = [];
+    ACHIEVEMENTS.forEach(a => {
+      if (!unlocked.has(a.id) && a.check(prog)) {
+        unlocked.add(a.id);
+        newOnes.push(a);
+      }
+    });
+    if (newOnes.length) {
+      saveUnlocked(unlocked);
+      newOnes.forEach(a => {
+        setTimeout(() => showToast(`🏅 Thành tích mới: ${a.icon} ${a.name}`, '🎉'), 400);
+      });
+    }
+  }
+
+  // ─── Unit Learning Page ───────────────────────────────────
+  function setupUnitsPage() {
+    const grid = document.getElementById('units-grid');
+    if (!grid) return;
+    const srs  = getSrsData();
+    const now  = Date.now();
+
+    grid.innerHTML = UNIT_METADATA.map(unit => {
+      const prog   = getProgress();
+      const scores = prog.unitScores || {};
+      const best   = scores[unit.id];
+      const pct    = best ? best.pct : 0;
+      const done   = pct >= 70;
+
+      return `<div class="unit-card ${done?'unit-done':''}" onclick="App.showUnitDetail(${unit.id})">
+        <div class="unit-num">Unit ${unit.id}</div>
+        <div class="unit-title">${unit.title}</div>
+        <div class="unit-tags">
+          ${unit.vocab.map(v=>`<span class="unit-tag unit-tag-vocab">📂 ${v}</span>`).join('')}
+          <span class="unit-tag unit-tag-grammar">📝 ${unit.grammar}</span>
+        </div>
+        <div class="unit-progress-wrap">
+          <div class="unit-progress-fill" style="width:${pct}%"></div>
+        </div>
+        <div class="unit-score-row">
+          <span>${pct > 0 ? `Best: <b class="unit-best-score" style="color:${pct>=80?'var(--success)':pct>=60?'var(--warning)':'var(--danger)'}">${pct}%</b>` : '<span style="color:var(--text-muted)">Chưa làm</span>'}</span>
+          <span>${done ? '<span style="color:var(--success);font-size:.72rem">✓ Hoàn thành</span>' : ''}</span>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  function showUnitDetail(unitId) {
+    const unit = UNIT_METADATA.find(u => u.id === unitId);
+    if (!unit) return;
+
+    // Get sample vocab words for this unit
+    const keywords = unit.vocab.map(k => k.toLowerCase());
+    const unitVocab = DB.vocab.filter(v =>
+      keywords.some(k => v.category.toLowerCase().includes(k))
+    ).slice(0, 12);
+
+    const prog   = getProgress();
+    const scores = prog.unitScores || {};
+    const best   = scores[unitId];
+    const bestHtml = best
+      ? `<span style="color:${best.pct>=80?'var(--success)':best.pct>=60?'var(--warning)':'var(--danger)'}">Best: <b>${best.pct}%</b> (${best.correct}/${best.total})</span>`
+      : '<span style="color:var(--text-muted)">Chưa làm</span>';
+
+    const detailEl = document.getElementById('unit-detail');
+    detailEl.style.display = 'block';
+    detailEl.innerHTML = `
+      <div class="unit-detail-panel">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px">
+          <div class="unit-detail-title">Unit ${unitId}: ${unit.title}</div>
+          <button onclick="document.getElementById('unit-detail').style.display='none'" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:1.1rem">✕</button>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+          ${unit.vocab.map(v=>`<span class="unit-tag unit-tag-vocab">📂 ${v}</span>`).join('')}
+          <span class="unit-tag unit-tag-grammar">📝 Ngữ pháp: ${unit.grammar}</span>
+        </div>
+        ${unitVocab.length ? `
+          <div style="font-size:.75rem;color:var(--text-secondary);font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Từ vựng chủ đề</div>
+          <div class="unit-vocab-preview">${unitVocab.map(v=>`<span class="unit-vocab-chip" title="${v.meaning}">${v.word}</span>`).join('')}</div>
+        ` : ''}
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-top:6px">
+          <div style="font-size:.82rem;color:var(--text-muted)">${bestHtml}</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn btn-outline btn-sm" onclick="App.openUnitFlashcard(${unitId})">🃏 Flashcard từ vựng</button>
+            <button class="btn btn-primary btn-sm" onclick="App.startUnitQuizFromPage(${unitId})">▶ Luyện tập Unit ${unitId}</button>
+          </div>
+        </div>
+      </div>`;
+    detailEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  function openUnitFlashcard(unitId) {
+    const unit = UNIT_METADATA.find(u => u.id === unitId);
+    if (!unit) return;
+    const keywords = unit.vocab.map(k => k.toLowerCase());
+    const pool = DB.vocab.filter(v => keywords.some(k => v.category.toLowerCase().includes(k)));
+    if (pool.length === 0) { showToast('Chưa có từ vựng cho Unit này.', '⚠️'); return; }
+
+    // Switch to vocab page and open flashcard with this pool
+    vocabFilter = 'All';
+    fcDeck = buildSrsDeck(pool);
+    fcIndex = 0; fcKnown = 0; fcReview = 0; fcSkip = 0; fcFlipped = false;
+
+    const overlay = document.getElementById('flashcard-overlay');
+    overlay.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+    renderFcCardSRS();
+    showToast(`Flashcard Unit ${unitId}: ${pool.length} từ`, '🃏');
+  }
+
+  function startUnitQuizFromPage(unitId) {
+    // Trigger unit quiz and navigate to practice
+    navigate('practice');
+    requestAnimationFrame(() => {
+      generateUnitQuiz(unitId, undefined);
+    });
+  }
+
+  // ─── Stats Page ───────────────────────────────────────────
+  function renderStatsPage() {
+    const el = document.getElementById('stats-content');
+    if (!el) return;
+
+    const prog    = getProgress();
+    const sd      = getStreakData();
+    const xp      = getXP();
+    const li      = getLevelInfo(xp);
+    const hist    = sd.history || [];
+    const histSet = new Set(hist);
+    const unlocked = getUnlocked();
+
+    // ── Heatmap: last 70 days ──
+    const heatDays = Array.from({length:70}, (_,i) => {
+      const d = new Date(); d.setDate(d.getDate() - (69-i));
+      const str = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+      const isToday = str === todayStr();
+      const active = histSet.has(str);
+      return `<div class="hm-cell ${active?'hm-4':''} ${isToday?'hm-today':''}" title="${str}"></div>`;
+    }).join('');
+
+    // ── Weekly bar chart: last 7 weeks quiz count ──
+    const weeklyScores = prog.weeklyScores || [];
+    const chartBars = weeklyScores.slice(-7).map((s,i) => {
+      const maxS = Math.max(...weeklyScores.slice(-7), 1);
+      const h = Math.round(s / maxS * 100);
+      return `<div class="bar-col">
+        <div class="bar-body" style="height:${h}%"></div>
+        <div class="bar-label">T${i+1}</div>
+      </div>`;
+    }).join('') || '<div style="color:var(--text-muted);font-size:.82rem;padding:10px">Chưa có dữ liệu tuần</div>';
+
+    // ── SRS summary ──
+    const srsAll = getSrsData();
+    const srsTotal = Object.keys(srsAll).length;
+    const now = Date.now();
+    const srsDue = Object.values(srsAll).filter(c => c.dueDate <= now).length;
+    const srsMastered = Object.values(srsAll).filter(c => c.reps >= 4).length;
+
+    // ── Unit completion ──
+    const unitScores = prog.unitScores || {};
+    const unitsDone = Object.values(unitScores).filter(s => s.pct >= 70).length;
+
+    el.innerHTML = `
+      <!-- Level card -->
+      <div class="stats-hero">
+        <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+          <div style="font-size:3rem">${li.level.name.split(' ').pop()}</div>
+          <div style="flex:1;min-width:160px">
+            <div style="font-size:1.3rem;font-weight:900">${li.level.name}</div>
+            <div style="font-size:.82rem;color:var(--text-secondary);margin:4px 0">${xp} XP tổng cộng</div>
+            <div class="xp-track" style="max-width:260px"><div class="xp-fill" style="width:${li.pct}%"></div></div>
+            <div style="font-size:.72rem;color:var(--text-muted);margin-top:4px">${li.next ? `${li.next.min - xp} XP đến ${li.next.name}` : '🏆 Cấp độ tối đa!'}</div>
+          </div>
+          <div style="text-align:center">
+            <div style="font-size:2rem;font-weight:900;color:#fbbf24">${sd.streak||0} 🔥</div>
+            <div style="font-size:.72rem;color:var(--text-muted)">Streak hiện tại</div>
+            <div style="font-size:.78rem;color:var(--text-secondary);margin-top:2px">Best: ${sd.best||0} ngày</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Stats grid -->
+      <div class="stats-grid">
+        <div class="stats-tile"><div class="stats-tile-num">${prog.vocabSeen||0}</div><div class="stats-tile-label">Từ đã học</div></div>
+        <div class="stats-tile"><div class="stats-tile-num">${prog.testsCompleted||0}</div><div class="stats-tile-label">Bài thi</div></div>
+        <div class="stats-tile"><div class="stats-tile-num">${prog.totalAnswered||0}</div><div class="stats-tile-label">Câu đã làm</div></div>
+        <div class="stats-tile"><div class="stats-tile-num">${prog.accuracy||0}%</div><div class="stats-tile-label">Độ chính xác</div></div>
+        <div class="stats-tile"><div class="stats-tile-num" style="color:#fbbf24">${srsDue}</div><div class="stats-tile-label">Thẻ đến hạn SRS</div></div>
+        <div class="stats-tile"><div class="stats-tile-num" style="color:var(--success)">${srsMastered}</div><div class="stats-tile-label">Thẻ đã thuộc</div></div>
+        <div class="stats-tile"><div class="stats-tile-num">${srsTotal}</div><div class="stats-tile-label">Tổng thẻ SRS</div></div>
+        <div class="stats-tile"><div class="stats-tile-num">${unitsDone}/${UNIT_METADATA.length}</div><div class="stats-tile-label">Units hoàn thành</div></div>
+      </div>
+
+      <!-- Heatmap -->
+      <div class="heatmap-wrap">
+        <div class="heatmap-title">📅 Lịch học 70 ngày gần nhất</div>
+        <div class="heatmap-grid">${heatDays}</div>
+        <div style="font-size:.72rem;color:var(--text-muted);margin-top:8px">Ô màu = ngày có hoạt động học · Viền vàng = hôm nay</div>
+      </div>
+
+      <!-- Weekly bars -->
+      <div class="progress-chart-wrap">
+        <div class="heatmap-title">📈 Số bài thi theo tuần</div>
+        <div class="bar-chart">${chartBars}</div>
+      </div>
+
+      <!-- Achievements -->
+      <div style="font-size:.88rem;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;margin-bottom:14px">🏅 Thành tích (${unlocked.size}/${ACHIEVEMENTS.length})</div>
+      <div class="achievement-grid">
+        ${ACHIEVEMENTS.map(a => `
+          <div class="achievement-card ${unlocked.has(a.id)?'unlocked':'locked'}">
+            <div class="ach-icon">${a.icon}</div>
+            <div>
+              <div class="ach-name">${a.name}</div>
+              <div class="ach-desc">${a.desc}</div>
+            </div>
+          </div>`).join('')}
+      </div>
+      <div style="text-align:center;margin-top:12px">
+        <button class="btn btn-outline btn-sm" onclick="App.resetAllData()" style="border-color:var(--danger);color:var(--danger);font-size:.75rem">🗑 Xóa toàn bộ dữ liệu</button>
+      </div>`;
+  }
+
+  function resetAllData() {
+    if (!confirm('Bạn có chắc muốn xóa toàn bộ tiến trình, XP, streak và SRS? Hành động này không thể hoàn tác.')) return;
+    ['toeic_progress','toeic_srs','toeic_xp','toeic_streak','toeic_ach'].forEach(k => localStorage.removeItem(k));
+    renderHomeDashboard();
+    renderStreakBanner();
+    renderStatsPage();
+    showToast('Đã xóa toàn bộ dữ liệu.', '🗑');
+  }
+
+  // ─── Hook into submitQuiz to award XP + save unit score ───
+  const _origUpdateProgress = updateProgress;
+  function updateProgressGamified(correct, total) {
+    _origUpdateProgress(correct, total);
+    const pct = Math.round(correct / total * 100);
+    // XP: 1 per correct answer + bonus for accuracy
+    const bonus = pct >= 90 ? 15 : pct >= 75 ? 8 : pct >= 60 ? 4 : 0;
+    addXP(correct + bonus, 'quiz-' + Date.now());
+
+    // Check perfect score
+    if (pct === 100) {
+      const prog = getProgress();
+      saveProgress({ hasPerfect: true });
+    }
+
+    // Save unit score if unit mode
+    if (quizMode === 'unit-review') {
+      // Find which unit triggered (stored in quizMode context)
+      const prog = getProgress();
+      const unitScores = prog.unitScores || {};
+      if (_currentUnitId) {
+        const prev = unitScores[_currentUnitId];
+        if (!prev || pct > prev.pct) {
+          unitScores[_currentUnitId] = { pct, correct, total, date: todayStr() };
+          saveProgress({ unitScores });
+        }
+      }
+    }
+
+    // Track weekly scores
+    const prog   = getProgress();
+    const week   = getWeekNumber();
+    const weekly = prog.weeklyData || {};
+    const wKey   = week.year + '-' + week.week;
+    weekly[wKey] = (weekly[wKey] || 0) + 1;
+    // Convert to array for chart
+    const weeklyScores = Object.values(weekly).slice(-10);
+    saveProgress({ weeklyData: weekly, weeklyScores });
+
+    recordActivity();
+    checkAchievements();
+  }
+
+  let _currentUnitId = null;
+
+  function getWeekNumber() {
+    const d = new Date();
+    const jan1 = new Date(d.getFullYear(), 0, 1);
+    const week = Math.ceil(((d - jan1) / 864e5 + jan1.getDay() + 1) / 7);
+    return { year: d.getFullYear(), week };
+  }
+
+  // Monkey-patch generateUnitQuiz to track unit id
+  const _origGenerateUnitQuiz = generateUnitQuiz;
+  function generateUnitQuizTracked(unitId, seed) {
+    _currentUnitId = unitId;
+    _origGenerateUnitQuiz(unitId, seed);
+  }
+
+  // ─── Hook navigate to render stats/units on page open ─────
+  const _origNavigate = navigate;
+  function navigateGamified(page) {
+    _origNavigate(page);
+    if (page === 'stats')  { renderStatsPage(); }
+    if (page === 'units')  { setupUnitsPage(); }
+    if (page === 'home')   { renderStreakBanner(); }
+  }
+
   // ─── Modal ───
   function showModal(content, title = '') {
     document.getElementById('modal-title').textContent = title;
@@ -1012,12 +2042,19 @@ const App = (() => {
 
   // ─── Public API (expose to teacher-core.js too) ───
   return {
-    init, navigate,
+    init, navigate: navigateGamified,
     showVocabDetail, selectAnswer, closeModal,
     handleHomeworkCode, jumpToQuestion,
     goToGrammar,
     startWrongReview, startGrammarDrill,
-    flipCard, rateCard, skipCard, closeFlashcard, restartReviewCards,
+    flipCard, rateCard, rateCardSRS, skipCard, closeFlashcard, restartReviewCards,
+    // Vocab learning modes
+    openVocabQuiz, closeVocabQuiz, vqSelect, vqNext,
+    openVocabFill, closeVocabFill, vfSelect, vfNext,
+    openVocabMatch, closeVocabMatch, vmTileClick, vmNewRound,
+    // Gamification
+    showUnitDetail, openUnitFlashcard, startUnitQuizFromPage,
+    resetAllData,
     getDB: () => DB,
     getFlatQuestions: () => flatQuestions,
     getUnitMetadata: () => UNIT_METADATA,
