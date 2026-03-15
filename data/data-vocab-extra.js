@@ -214,7 +214,7 @@ if (typeof TOEIC_VOCAB !== 'undefined') {
   // ── Environment (3) ──
   {"id": 1183, "word": "net zero", "phonetic": "/ˌnet ˈzɪər.oʊ/", "type": "noun", "meaning": "mục tiêu phát thải ròng bằng không", "example": "The company pledged to achieve net zero emissions by 2035.", "category": "Environment"},
   {"id": 1184, "word": "green procurement", "phonetic": "/ɡriːn prəˈkjʊər.mənt/", "type": "noun", "meaning": "mua sắm xanh, ưu tiên nhà cung cấp thân thiện môi trường", "example": "Green procurement policies reduced the company's environmental impact.", "category": "Environment"},
-  {"id": 1187, "word": "carbon offset", "phonetic": "/ˈkɑːr.bən ˈɒf.set/", "type": "noun", "meaning": "bù đắp lượng khí thải carbon bằng hoạt động xanh", "example": "The airline offers passengers the option to purchase carbon offsets.", "category": "Environment"}
+  {"id": 1187, "word": "carbon offset", "phonetic": "/ˈkɑːr.bən ˈɒf.set/", "type": "noun", "meaning": "bù đắp lượng khí thải carbon bằng hoạt động xanh", "example": "The airline offers passengers the option to purchase carbon offsets.", "category": "Environment"},
 
 
   // ── Collocations nâng cao (40) ── ETS Part 6/7 high-frequency
@@ -725,7 +725,7 @@ if (typeof TOEIC_VOCAB !== 'undefined') {
   {"id":1654,"word":"unanimous","phonetic":"/juːˈnæn.ɪ.məs/","type":"adjective","meaning":"nhất trí / đồng thuận hoàn toàn","example":"The committee reached a unanimous decision to approve the new budget.","category":"General"},
   {"id":1655,"word":"venue","phonetic":"/ˈven.juː/","type":"noun","meaning":"địa điểm tổ chức (sự kiện)","example":"The annual awards ceremony will be held at a prestigious central London venue.","category":"General"},
   {"id":1656,"word":"waiver","phonetic":"/ˈweɪ.vər/","type":"noun","meaning":"sự từ bỏ quyền / miễn trừ (điều khoản)","example":"The client requested a waiver of the cancellation fee due to exceptional circumstances.","category":"General"},
-  {"id":1657,"word":"withdrawal","phonetic":"/wɪðˈdrɔː.əl/","type":"noun","meaning":"sự rút lui / rút tiền","example":"The bank processed the withdrawal request within the same business day.","category":"General"}
+  {"id":1657,"word":"withdrawal","phonetic":"/wɪðˈdrɔː.əl/","type":"noun","meaning":"sự rút lui / rút tiền","example":"The bank processed the withdrawal request within the same business day.","category":"General"},
   
   // BATCH 1 VOCAB PART 2 - IDs 1488-1537 (50 words)
   
