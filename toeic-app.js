@@ -1082,7 +1082,19 @@ const App = (() => {
   }
 
   function handleHomeworkCode(code) {
-    // Định dạng chuẩn: HW-UNIT-{unitId}-{seed}
+    // ── Mã đề kiểm tra: EXAM-P{p5}-G{p6}-Q{p7}-{seed} ──
+    const examMatch = code.match(/EXAM-P(\d+)-G(\d+)-Q(\d+)-(\d+)/i);
+    if (examMatch) {
+      generateExamFromCode(
+        parseInt(examMatch[1]),  // p5Count
+        parseInt(examMatch[2]),  // p6Groups
+        parseInt(examMatch[3]),  // p7Target
+        parseInt(examMatch[4])   // seed
+      );
+      return;
+    }
+
+    // ── Mã bài tập về nhà: HW-UNIT-{unitId}-{seed} ──
     const match = code.match(/HW-UNIT-(\d+)-(\d+)/i);
     if (match) {
       _currentUnitId = parseInt(match[1]);
@@ -1092,9 +1104,72 @@ const App = (() => {
       if (fallback) {
         showToast('Mã cũ — không có seed. Vui lòng dùng mã mới từ giáo viên (VD: HW-UNIT-1-4823)', '⚠️');
       } else {
-        showToast('Mã không hợp lệ. Định dạng: HW-UNIT-1-4823', '⚠️');
+        showToast('Mã không hợp lệ. Định dạng: HW-UNIT-1-4823 hoặc EXAM-P30-G4-Q54-123456', '⚠️');
       }
     }
+  }
+
+  // ─── Tái tạo đề kiểm tra từ mã EXAM ──────────────────────────
+  function generateExamFromCode(p5Count, p6Groups, p7Target, seed) {
+    // ── Part 5: seeded shuffle toàn bộ pool, lấy p5Count câu đầu ──
+    const p5pool     = seededShuffle([...DB.questions.part5], seed);
+    const selectedP5 = p5pool.slice(0, Math.min(p5Count, p5pool.length));
+
+    // ── Part 6: seeded shuffle, lấy p6Groups đoạn đầy đủ 4 câu ──
+    const p6full     = DB.questions.part6.filter(g => g.questions.length === 4);
+    const selectedP6 = seededShuffle(p6full, seed + 1).slice(0, Math.min(p6Groups, p6full.length));
+
+    // ── Part 7: seeded shuffle theo loại giống teacher-core ──
+    const singles = seededShuffle(DB.questions.part7.filter(g => g.type === 'single' || !g.type), seed + 2);
+    const doubles = seededShuffle(DB.questions.part7.filter(g => g.type === 'double'), seed + 3);
+    const triples = seededShuffle(DB.questions.part7.filter(g => g.type === 'triple'), seed + 4);
+    const selectedP7 = [];
+    let p7count = 0;
+    const addGroups = list => {
+      for (const g of list) {
+        if (p7count + g.questions.length <= p7Target) { selectedP7.push(g); p7count += g.questions.length; }
+      }
+    };
+    addGroups(triples.slice(0, 3));
+    addGroups(doubles.slice(0, 2));
+    addGroups(singles);
+
+    if (selectedP5.length === 0) { showToast('Không tải được đề — dữ liệu thiếu câu hỏi Part 5.', '❌'); return; }
+
+    // Flatten thành quizQuestions
+    const allQ = [
+      ...selectedP5.map(q => ({...q, part:5})),
+      ...selectedP6.flatMap(g => g.questions.map(q => ({...q, passage:g.passage, passageTitle:g.passageTitle, type:g.type||'text-completion', part:6}))),
+      ...selectedP7.flatMap(g => g.questions.map(q => ({...q, passage:g.passage, passageTitle:g.passageTitle, type:g.type||'single', part:7}))),
+    ];
+
+    quizQuestions   = allQ;
+    quizIndex = 0; quizScore = 0; quizAnswered = 0;
+    quizUserAnswers = new Array(allQ.length).fill(null);
+    quizTimeLeft    = allQ.length * 45;
+    quizMode        = 'exam-review';
+
+    document.getElementById('quiz-setup').style.display      = 'none';
+    document.getElementById('quiz-container').style.display  = 'block';
+    document.getElementById('results-container').style.display = 'none';
+    document.getElementById('quiz-total').textContent        = allQ.length;
+
+    const partLabel = document.getElementById('quiz-part-label');
+    partLabel.textContent    = 'Mock Test';
+    partLabel.className      = 'tag';
+    partLabel.style.background = '#2563eb';
+    partLabel.style.color      = '#fff';
+
+    const unseenBadge = document.getElementById('quiz-unseen-badge');
+    if (unseenBadge) {
+      unseenBadge.textContent   = `📝 Đề kiểm tra | P5:${selectedP5.length} P6:${selectedP6.reduce((s,g)=>s+g.questions.length,0)} P7:${p7count} câu`;
+      unseenBadge.style.display = 'inline-block';
+    }
+
+    startTimer();
+    renderQuestionNavigator();
+    renderQuestion();
+    showToast(`✅ Đã tải đề kiểm tra · ${allQ.length} câu`, '📝');
   }
 
   // ─── Seeded PRNG (Mulberry32) ───
