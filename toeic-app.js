@@ -28,10 +28,10 @@ const App = (() => {
     { id:2,  title:"Office Life",             vocab:["Workplace","HR"],                 grammar:"passive"            },
     { id:3,  title:"Personnel & HR",          vocab:["Recruitment","Training"],         grammar:"conditionals"       },
     { id:4,  title:"Marketing & Sales",       vocab:["Marketing","Sales"],              grammar:"word-form"          },
-    { id:5,  title:"Finance & Budget",        vocab:["Finance","Accounting"],           grammar:"prepositions"       }, // fixed: was "preposition"
+    { id:5,  title:"Finance & Budget",        vocab:["Finance","Accounting"],           grammar:"preposition"        }, // fixed: prepositions→preposition (matches question type)
     { id:6,  title:"Tech & Innovation",       vocab:["Tech","Innovation"],              grammar:"conjunction"        },
-    { id:7,  title:"Manufacturing & QC",      vocab:["Manufacturing","Production"],     grammar:"pronoun"            }, // swapped with Unit 8 (pronoun before relative-clause)
-    { id:8,  title:"Travel & Tourism",        vocab:["Travel","Tourism"],               grammar:"relative-clause"    }, // moved here after pronoun
+    { id:7,  title:"Manufacturing & QC",      vocab:["Manufacturing","Production"],     grammar:"pronoun"            },
+    { id:8,  title:"Travel & Tourism",        vocab:["Travel","Tourism"],               grammar:"relative-clause"    },
     { id:9,  title:"Corporate Events",        vocab:["Events","Conferences"],           grammar:"modal"              },
     { id:10, title:"Customer Service",        vocab:["Customer","Customer Service"],    grammar:"gerund-infinitive"  },
     { id:11, title:"Logistics",               vocab:["Logistics","Shipping"],           grammar:"comparison"         },
@@ -40,8 +40,8 @@ const App = (() => {
     { id:14, title:"Real Estate",             vocab:["Property","Facilities"],          grammar:"noun-clauses"       },
     { id:15, title:"Media & Communications", vocab:["Media","Communication"],          grammar:"adverb-time"        },
     { id:16, title:"Retail & E-commerce",    vocab:["Sales","E-commerce"],             grammar:"vocabulary-context" },
-    { id:17, title:"Research & Development", vocab:["Research","Data"],                grammar:"part6-strategy"     },
-    { id:18, title:"Professional Training",  vocab:["Training","Education"],           grammar:"part7-strategy"     },
+    { id:17, title:"Research & Development", vocab:["Research","Data"],                grammar:"vocabulary"         }, // fixed: part6-strategy→vocabulary (no Part5 qs with that type)
+    { id:18, title:"Professional Training",  vocab:["Training","Education"],           grammar:"vocabulary-context" }, // fixed: part7-strategy→vocabulary-context
     { id:19, title:"Law & Contracts",        vocab:["Legal","Contract"],               grammar:"inversion"          },
     { id:20, title:"Environment & Energy",   vocab:["Environment","Sustainability"],   grammar:"quantifiers"        },
     { id:21, title:"Business Communications",vocab:["Communication","Phrases"],        grammar:"business-english"   },
@@ -49,7 +49,30 @@ const App = (() => {
     { id:23, title:"Advanced Structures",    vocab:["General","Advanced"],             grammar:"prep-structures"    },
   ];
 
-  // ─── Bootstrap / Data Loading ───
+  // ─── TOEIC Reading Score Conversion Table (% đúng → dải điểm) ───
+  // Dựa trên bảng chuyển đổi ETS chính thức (Reading: 0–495)
+  const TOEIC_SCORE_RANGES = [
+    { pctMin:95, pctMax:100, lo:460, hi:495 },
+    { pctMin:88, pctMax:94,  lo:415, hi:455 },
+    { pctMin:82, pctMax:87,  lo:380, hi:410 },
+    { pctMin:76, pctMax:81,  lo:345, hi:375 },
+    { pctMin:70, pctMax:75,  lo:310, hi:340 },
+    { pctMin:64, pctMax:69,  lo:275, hi:305 },
+    { pctMin:58, pctMax:63,  lo:240, hi:270 },
+    { pctMin:52, pctMax:57,  lo:205, hi:235 },
+    { pctMin:46, pctMax:51,  lo:170, hi:200 },
+    { pctMin:40, pctMax:45,  lo:140, hi:165 },
+    { pctMin:34, pctMax:39,  lo:110, hi:135 },
+    { pctMin:28, pctMax:33,  lo: 80, hi:105 },
+    { pctMin:22, pctMax:27,  lo: 55, hi: 75 },
+    { pctMin:16, pctMax:21,  lo: 35, hi: 50 },
+    { pctMin: 0, pctMax:15,  lo: 10, hi: 30 },
+  ];
+
+  function estimateToeicScore(pct) {
+    return TOEIC_SCORE_RANGES.find(r => pct >= r.pctMin && pct <= r.pctMax)
+        || TOEIC_SCORE_RANGES[TOEIC_SCORE_RANGES.length - 1];
+  }
   function init() {
     // Data is loaded via <script> tags (data-vocab.js, data-grammar.js, data-questions.js)
     // Works both offline (file://) and online (https://)
@@ -83,6 +106,7 @@ const App = (() => {
     setupGrammarPage();
     setupPracticePage();
     setupHomeworkLogic();
+    updateWrongCountUI();
 
     // Update badges
     document.getElementById('badge-vocab').textContent     = `📖 ${DB.vocab.length}+ Từ vựng`;
@@ -158,6 +182,7 @@ const App = (() => {
       }
     });
     saveProgress({ seenIds: [...seen], wrongIds: [...wrong] });
+    updateWrongCountUI();
   }
 
   function buildSmartPool(rawPool) {
@@ -200,7 +225,167 @@ const App = (() => {
       });
     });
     document.getElementById('vocab-search').addEventListener('input', renderVocabGrid);
+    document.getElementById('btn-flashcard').addEventListener('click', openFlashcard);
     renderVocabGrid();
+  }
+
+  // ─── Flashcard State ───
+  let fcDeck = [], fcIndex = 0, fcFlipped = false;
+  let fcKnown = 0, fcReview = 0, fcSkip = 0;
+
+  function openFlashcard() {
+    // Build deck from current filter + search (what user sees in grid)
+    const search   = (document.getElementById('vocab-search')?.value || '').toLowerCase();
+    fcDeck = DB.vocab.filter(v => {
+      const matchCat    = vocabFilter === 'All' || v.category === vocabFilter;
+      const matchSearch = !search || v.word.toLowerCase().includes(search) || v.meaning.toLowerCase().includes(search);
+      return matchCat && matchSearch;
+    });
+    if (fcDeck.length === 0) { showToast('Không có từ nào để luyện.', '⚠️'); return; }
+    shuffleArray(fcDeck);
+    fcIndex = 0; fcKnown = 0; fcReview = 0; fcSkip = 0; fcFlipped = false;
+
+    const overlay = document.getElementById('flashcard-overlay');
+    overlay.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+    renderFcCard();
+  }
+
+  function closeFlashcard() {
+    const overlay = document.getElementById('flashcard-overlay');
+    overlay.style.display = 'none';
+    document.body.style.overflow = '';
+    // If deck finished, show summary toast
+    if (fcIndex >= fcDeck.length && fcDeck.length > 0) {
+      showToast(`✅ Xong! Biết: ${fcKnown} · Cần ôn: ${fcReview} · Bỏ qua: ${fcSkip}`, '🃏');
+    }
+  }
+
+  function renderFcCard() {
+    if (fcIndex >= fcDeck.length) { showFcComplete(); return; }
+    const v = fcDeck[fcIndex];
+    fcFlipped = false;
+
+    // Reset flip
+    const inner = document.getElementById('fc-inner');
+    if (inner) inner.classList.remove('flipped');
+    const actions = document.getElementById('fc-actions');
+    if (actions) actions.style.display = 'none';
+
+    // Populate
+    document.getElementById('fc-word').textContent     = v.word;
+    document.getElementById('fc-phonetic').textContent = v.phonetic;
+    document.getElementById('fc-type').textContent     = v.type.toUpperCase();
+    document.getElementById('fc-meaning').textContent  = v.meaning;
+    document.getElementById('fc-example').textContent  = '"' + v.example + '"';
+    document.getElementById('fc-category-label').textContent = v.category;
+
+    // Progress
+    const pct = Math.round(fcIndex / fcDeck.length * 100);
+    document.getElementById('fc-progress-bar').style.width = pct + '%';
+    document.getElementById('fc-progress-text').textContent = `${fcIndex + 1} / ${fcDeck.length}`;
+    updateFcStats();
+  }
+
+  function flipCard() {
+    if (fcFlipped) return;
+    fcFlipped = true;
+    const inner   = document.getElementById('fc-inner');
+    const actions = document.getElementById('fc-actions');
+    if (inner)   inner.classList.add('flipped');
+    if (actions) actions.style.display = 'block';
+    // Mark vocab as seen
+    const v = fcDeck[fcIndex];
+    if (v) {
+      const prog = getProgress();
+      const seen = new Set(prog.vocabSeen_ids || []);
+      seen.add(v.id);
+      saveProgress({ vocabSeen: seen.size, vocabSeen_ids: [...seen] });
+      document.getElementById('stat-vocab').textContent = seen.size;
+    }
+  }
+
+  function rateCard(rating) {
+    const v = fcDeck[fcIndex];
+    if (!v) return;
+    if (rating === 'right') {
+      fcKnown++;
+      // Save to localStorage as "known"
+      const prog = getProgress();
+      const known = new Set(prog.fcKnown_ids || []);
+      known.add(v.id);
+      saveProgress({ fcKnown_ids: [...known] });
+    } else {
+      fcReview++;
+      const prog = getProgress();
+      const review = new Set(prog.fcReview_ids || []);
+      review.add(v.id);
+      saveProgress({ fcReview_ids: [...review] });
+    }
+    updateFcStats();
+    fcIndex++;
+    setTimeout(renderFcCard, 180);
+  }
+
+  function skipCard() {
+    fcSkip++;
+    updateFcStats();
+    fcIndex++;
+    setTimeout(renderFcCard, 100);
+  }
+
+  function updateFcStats() {
+    const k = document.getElementById('fc-known-count');
+    const r = document.getElementById('fc-review-count');
+    const s = document.getElementById('fc-skip-count');
+    if (k) k.textContent = fcKnown;
+    if (r) r.textContent = fcReview;
+    if (s) s.textContent = fcSkip;
+  }
+
+  function showFcComplete() {
+    const inner = document.getElementById('fc-inner');
+    if (inner) inner.innerHTML = `
+      <div class="fc-front" style="cursor:default">
+        <div style="font-size:2.8rem;margin-bottom:8px">🎉</div>
+        <div style="font-size:1.3rem;font-weight:800;color:var(--text-primary);margin-bottom:16px">Hoàn thành bộ từ!</div>
+        <div style="display:flex;gap:20px;justify-content:center;font-size:0.9rem">
+          <span style="color:var(--success)">✓ ${fcKnown} biết</span>
+          <span style="color:var(--warning)">🔄 ${fcReview} cần ôn</span>
+          <span style="color:var(--text-muted)">— ${fcSkip} bỏ qua</span>
+        </div>
+        ${fcReview > 0 ? `<button class="btn btn-primary btn-sm" style="margin-top:20px" onclick="App.restartReviewCards()">🔄 Ôn lại ${fcReview} từ cần ôn</button>` : ''}
+        <button class="btn btn-outline btn-sm" style="margin-top:${fcReview>0?'10px':'20px'}" onclick="App.closeFlashcard()">Đóng</button>
+      </div>`;
+    document.getElementById('fc-progress-bar').style.width = '100%';
+    const actions = document.getElementById('fc-actions');
+    if (actions) actions.style.display = 'none';
+  }
+
+  function restartReviewCards() {
+    const prog = getProgress();
+    const reviewIds = new Set(prog.fcReview_ids || []);
+    fcDeck = DB.vocab.filter(v => reviewIds.has(v.id));
+    if (fcDeck.length === 0) { closeFlashcard(); return; }
+    shuffleArray(fcDeck);
+    fcIndex = 0; fcKnown = 0; fcReview = 0; fcSkip = 0; fcFlipped = false;
+    // Reset card HTML in case it was replaced with complete screen
+    const inner = document.getElementById('fc-inner');
+    if (inner) inner.innerHTML = `
+      <div class="fc-front">
+        <div id="fc-word" class="fc-word"></div>
+        <div id="fc-phonetic" class="fc-phonetic"></div>
+        <div id="fc-type" class="fc-type-tag"></div>
+        <div class="fc-hint">Nhấn để xem nghĩa</div>
+      </div>
+      <div class="fc-back">
+        <div id="fc-meaning" class="fc-meaning"></div>
+        <div id="fc-example" class="fc-example"></div>
+      </div>`;
+    // Clear saved review list for fresh start
+    saveProgress({ fcReview_ids: [] });
+    renderFcCard();
+    showToast(`Ôn lại ${fcDeck.length} từ cần ôn`, '🔄');
   }
 
   function renderVocabGrid() {
@@ -266,7 +451,24 @@ const App = (() => {
 
   function renderGrammarContent() {
     const topic = DB.grammar.find(t => t.id === grammarTopic);
-    document.getElementById('grammar-content-area').innerHTML = topic ? topic.content : '';
+    const area = document.getElementById('grammar-content-area');
+    if (!topic) { area.innerHTML = ''; return; }
+
+    // Count available drill questions for this topic
+    const drillPool = flatQuestions.filter(q => q.part === 5 && q.type === topic.id);
+    const drillCount = drillPool.length;
+
+    const drillBanner = drillCount > 0 ? `
+      <div class="grammar-drill-banner">
+        <span style="font-size:0.88rem;color:var(--text-secondary)">
+          📝 <strong style="color:var(--accent-2)">${drillCount} câu</strong> luyện tập cho chủ đề này
+        </span>
+        <button class="btn btn-sm btn-drill" onclick="App.startGrammarDrill('${topic.id}')">
+          ▶ Drill 5 câu
+        </button>
+      </div>` : '';
+
+    area.innerHTML = drillBanner + (topic.content || '');
   }
 
   // ─── Practice Page ───
@@ -283,6 +485,8 @@ const App = (() => {
     document.getElementById('btn-prev').addEventListener('click', prevQuestion);
     document.getElementById('btn-submit-quiz').addEventListener('click', submitQuiz);
     document.getElementById('btn-restart').addEventListener('click', restartPractice);
+    const wrongBtn = document.getElementById('btn-start-wrong');
+    if (wrongBtn) wrongBtn.addEventListener('click', startWrongReview);
     const firstCard = document.querySelector('.test-option-card');
     if (firstCard) { firstCard.classList.add('selected'); quizMode = firstCard.dataset.mode; }
   }
@@ -397,7 +601,8 @@ const App = (() => {
     const expBox = document.getElementById('explanation-box');
     if (userAns !== null) {
       expBox.classList.add('show');
-      expBox.innerHTML = `<div class="exp-title">${userAns===q.answer?'✅ Chính xác!':'❌ Chưa đúng!'}</div><p>📖 ${q.explanation}</p>`;
+      const grammarLinkHtml = buildGrammarLink(q);
+      expBox.innerHTML = `<div class="exp-title">${userAns===q.answer?'✅ Chính xác!':'❌ Chưa đúng!'}</div><p>📖 ${q.explanation}</p>${grammarLinkHtml}`;
     } else {
       expBox.classList.remove('show');
       expBox.innerHTML = '';
@@ -463,6 +668,29 @@ const App = (() => {
     else if (pct >= 60) { grade = 'Trung bình 📖'; gradeColor = 'var(--warning)'; }
     else { grade = 'Cần ôn thêm 💪'; gradeColor = 'var(--danger)'; }
     document.getElementById('grade-label').innerHTML = `<span style="color:${gradeColor};font-size:1.1rem;font-weight:700">${grade}</span>`;
+
+    // ── TOEIC Score Estimator ──
+    const scoreRow = estimateToeicScore(pct);
+    const scoreColor = pct >= 80 ? 'var(--success)' : pct >= 60 ? 'var(--warning)' : 'var(--danger)';
+    const modeName = quizMode === 'reading' ? 'Full Reading'
+                   : quizMode === 'part5'   ? 'Part 5'
+                   : quizMode === 'part6'   ? 'Part 6'
+                   : quizMode === 'part7'   ? 'Part 7'
+                   : quizMode === 'wrong'   ? 'Ôn câu sai'
+                   : quizMode === 'grammar-drill' ? 'Grammar Drill'
+                   : 'Luyện tập';
+    const estEl = document.getElementById('toeic-score-estimate');
+    if (estEl) {
+      estEl.innerHTML = `
+        <div class="toeic-estimate-box">
+          <div class="estimate-label">📊 Ước tính điểm Reading (${modeName})</div>
+          <div style="display:flex;align-items:baseline;gap:10px;margin:6px 0 4px">
+            <span class="estimate-range" style="color:${scoreColor}">${scoreRow.lo}–${scoreRow.hi}</span>
+            <span style="font-size:0.95rem;color:var(--text-muted);font-weight:600">/ 495</span>
+          </div>
+          <div class="estimate-note">Dựa trên tỉ lệ đúng ${pct}% · Điểm thật phụ thuộc từng đề ETS cụ thể</div>
+        </div>`;
+    }
   }
 
   function restartPractice() {
@@ -486,47 +714,81 @@ const App = (() => {
   }
 
   function handleHomeworkCode(code) {
-    const match = code.match(/HW-UNIT-(\d+)/i);
-    if (match) generateUnitQuiz(parseInt(match[1]));
-    else showToast('Mã bài tập không hợp lệ (VD: HW-UNIT-1)', '⚠️');
+    // Định dạng chuẩn: HW-UNIT-{unitId}-{seed}
+    const match = code.match(/HW-UNIT-(\d+)-(\d+)/i);
+    if (match) {
+      generateUnitQuiz(parseInt(match[1]), parseInt(match[2]));
+    } else {
+      const fallback = code.match(/HW-UNIT-(\d+)/i);
+      if (fallback) {
+        showToast('Mã cũ — không có seed. Vui lòng dùng mã mới từ giáo viên (VD: HW-UNIT-1-4823)', '⚠️');
+      } else {
+        showToast('Mã không hợp lệ. Định dạng: HW-UNIT-1-4823', '⚠️');
+      }
+    }
   }
 
-  function generateUnitQuiz(unitId) {
+  // ─── Seeded PRNG (Mulberry32) ───
+  function mulberry32(seed) {
+    return function() {
+      seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+      let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  }
+
+  function seededShuffle(arr, seed) {
+    const rng = mulberry32(seed);
+    const a = [...arr];
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(rng() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+
+  function generateUnitQuiz(unitId, seed) {
     const unit     = UNIT_METADATA.find(u => u.id === unitId);
     const prevUnit = UNIT_METADATA.find(u => u.id === unitId - 1);
     if (!unit) { showToast('Không tìm thấy dữ liệu cho Unit này.', '❌'); return; }
 
-    const keywords     = unit.vocab.map(k => k.toLowerCase());
-    const grammar      = unit.grammar;
-    const prevGrammar  = prevUnit ? prevUnit.grammar : null;
+    const isTeacher  = (seed === undefined || seed === null);
+    const activeSeed = isTeacher ? (Math.floor(Math.random() * 9000) + 1000) : seed;
 
-    // Chỉ dùng Part 5 cho bài luyện tập tích hợp (25 phút)
+    const keywords    = unit.vocab.map(k => k.toLowerCase());
+    const grammar     = unit.grammar;
+    const prevGrammar = prevUnit ? prevUnit.grammar : null;
+
+    // Normalize grammar type aliases (type mismatches between UNIT_METADATA and question data)
+    const grammarAliases = { 'prepositions': 'preposition', 'preposition': 'prepositions' };
+    const grammarTypes = new Set([grammar, grammarAliases[grammar]].filter(Boolean));
+    const prevGrammarTypes = prevGrammar
+      ? new Set([prevGrammar, grammarAliases[prevGrammar]].filter(Boolean))
+      : new Set();
+
     let pool = flatQuestions.filter(q => {
       if (q.part !== 5) return false;
-      return q.type === grammar || (prevGrammar && q.type === prevGrammar);
+      return grammarTypes.has(q.type) || (prevGrammar && prevGrammarTypes.has(q.type));
     });
 
-    // Nếu chưa đủ 20 câu, bổ sung từ Part 5 theo từ khóa vocab
     if (pool.length < 20) {
       const byVocab = flatQuestions.filter(q => {
         if (q.part !== 5 || pool.includes(q)) return false;
         const text = (q.question + ' ' + (q.explanation || '')).toLowerCase();
         return keywords.some(k => text.includes(k));
       });
-      shuffleArray(byVocab);
-      pool.push(...byVocab.slice(0, 20 - pool.length));
+      pool.push(...seededShuffle(byVocab, activeSeed + 1).slice(0, 20 - pool.length));
     }
 
-    // Nếu vẫn chưa đủ 20 câu, bổ sung Part 5 bất kỳ (ưu tiên đa dạng grammar type)
     if (pool.length < 20) {
       const remaining = flatQuestions.filter(q => q.part === 5 && !pool.includes(q));
-      shuffleArray(remaining);
-      pool.push(...remaining.slice(0, 20 - pool.length));
+      pool.push(...seededShuffle(remaining, activeSeed + 2).slice(0, 20 - pool.length));
     }
 
     if (pool.length === 0) { showToast(`Chưa có câu hỏi cho Unit ${unitId}.`, 'ℹ️'); return; }
 
-    quizQuestions   = shuffleArray([...pool]).slice(0, 20);
+    quizQuestions   = seededShuffle([...pool], activeSeed).slice(0, 20);
     quizIndex = 0; quizScore = 0; quizAnswered = 0;
     quizUserAnswers = new Array(quizQuestions.length).fill(null);
     quizTimeLeft    = quizQuestions.length * 45;
@@ -548,11 +810,179 @@ const App = (() => {
       unseenBadge.textContent   = `📚 Ôn tập: ${unit.title}${prevUnit ? ` | 🔄 Recycling: ${prevUnit.grammar}` : ''}`;
       unseenBadge.style.display = 'inline-block';
     }
+
+    if (isTeacher) {
+      const hwCode = `HW-UNIT-${unitId}-${activeSeed}`;
+      showToast(`Đã tạo bộ câu hỏi! Mã học viên: ${hwCode}`, '🔑');
+      const input = document.getElementById('homework-code-input');
+      if (input) input.value = hwCode;
+    } else {
+      showToast(`✅ Đã tải bộ câu hỏi Unit ${unitId}`, '📝');
+    }
+
     startTimer();
     renderQuestionNavigator();
     renderQuestion();
-    showToast(`Đã tạo bộ câu hỏi ôn tập Unit ${unitId}!`, '🚀');
   }
+
+  // ─── Wrong Count UI ───
+  function updateWrongCountUI() {
+    const wrongIds = getWrongIds();
+    const count = wrongIds.size;
+    const badge = document.getElementById('wrong-count-badge');
+    const card  = document.getElementById('wrong-review-card');
+    if (badge) badge.textContent = count;
+    if (card) {
+      if (count === 0) {
+        card.classList.add('wrong-review-empty');
+        const btn = document.getElementById('btn-start-wrong');
+        if (btn) { btn.disabled = true; btn.style.opacity = '0.45'; }
+      } else {
+        card.classList.remove('wrong-review-empty');
+        const btn = document.getElementById('btn-start-wrong');
+        if (btn) { btn.disabled = false; btn.style.opacity = ''; }
+      }
+    }
+  }
+
+  // ─── Wrong Answer Review Mode ───
+  function startWrongReview() {
+    const wrongIds = getWrongIds();
+    if (wrongIds.size === 0) {
+      showToast('Chưa có câu nào cần ôn! Hãy làm bài trước 😊', 'ℹ️');
+      return;
+    }
+    const pool = flatQuestions.filter(q => q.id && wrongIds.has(q.id));
+    if (pool.length === 0) { showToast('Không tìm thấy câu sai trong dữ liệu.', '⚠️'); return; }
+
+    const smartPool = buildSmartPool(pool);
+    quizQuestions   = smartPool; // ôn hết — không giới hạn số câu
+    quizIndex = 0; quizScore = 0; quizAnswered = 0;
+    quizUserAnswers = new Array(quizQuestions.length).fill(null);
+    quizTimeLeft    = quizQuestions.length * 60; // 1 phút / câu, thoải mái
+    quizMode        = 'wrong';
+
+    document.getElementById('quiz-setup').style.display      = 'none';
+    document.getElementById('quiz-container').style.display  = 'block';
+    document.getElementById('results-container').style.display = 'none';
+    document.getElementById('quiz-total').textContent        = quizQuestions.length;
+
+    const partLabel = document.getElementById('quiz-part-label');
+    partLabel.textContent   = 'Ôn sai';
+    partLabel.className     = 'tag';
+    partLabel.style.background = 'rgba(244,63,94,0.2)';
+    partLabel.style.color      = 'var(--danger)';
+
+    const unseenBadge = document.getElementById('quiz-unseen-badge');
+    if (unseenBadge) {
+      unseenBadge.textContent   = `🔁 Ôn lại ${quizQuestions.length} câu đã sai`;
+      unseenBadge.style.display = 'inline-block';
+    }
+
+    startTimer();
+    renderQuestionNavigator();
+    renderQuestion();
+    showToast(`Bắt đầu ôn ${quizQuestions.length} câu sai`, '🔁');
+  }
+
+  // ─── Grammar Mini Drill (5 câu) ───
+  function startGrammarDrill(typeId) {
+    const pool = flatQuestions.filter(q => q.part === 5 && q.type === typeId);
+    if (pool.length === 0) {
+      showToast('Chưa có câu luyện tập cho chủ đề này.', 'ℹ️');
+      return;
+    }
+    const smartPool = buildSmartPool(pool);
+    quizQuestions   = smartPool.slice(0, Math.min(5, smartPool.length));
+    quizIndex = 0; quizScore = 0; quizAnswered = 0;
+    quizUserAnswers = new Array(quizQuestions.length).fill(null);
+    quizTimeLeft    = quizQuestions.length * 50; // ~50 giây / câu cho drill
+    quizMode        = 'grammar-drill';
+
+    navigate('practice');
+    // small delay to let page transition complete
+    requestAnimationFrame(() => {
+      document.getElementById('quiz-setup').style.display      = 'none';
+      document.getElementById('quiz-container').style.display  = 'block';
+      document.getElementById('results-container').style.display = 'none';
+      document.getElementById('quiz-total').textContent        = quizQuestions.length;
+
+      const topic    = DB.grammar.find(t => t.id === typeId);
+      const partLabel = document.getElementById('quiz-part-label');
+      partLabel.textContent   = 'Drill';
+      partLabel.className     = 'tag';
+      partLabel.style.background = 'rgba(139,92,246,0.25)';
+      partLabel.style.color      = 'var(--accent-2)';
+
+      const unseenBadge = document.getElementById('quiz-unseen-badge');
+      if (unseenBadge) {
+        unseenBadge.textContent   = `📝 Luyện: ${topic ? topic.icon + ' ' + topic.title : typeId}`;
+        unseenBadge.style.display = 'inline-block';
+      }
+
+      startTimer();
+      renderQuestionNavigator();
+      renderQuestion();
+      showToast(`Drill: ${quizQuestions.length} câu về ${topic ? topic.title : typeId}`, '📝');
+    });
+  }
+
+  // ─── Grammar Link (hiện sau khi chọn đáp án Part 5) ───
+  const TYPE_TO_GRAMMAR_ID = {
+    'word-form':'word-form','verb-tense':'verb-tense','passive':'passive',
+    'preposition':'prepositions','prepositions':'prepositions',
+    'conjunction':'conjunction','pronoun':'pronoun','article':'article',
+    'relative-clause':'relative-clause','modal':'modal',
+    'gerund-infinitive':'gerund-infinitive','comparison':'comparison',
+    'subject-verb':'subject-verb','conditionals':'conditionals',
+    'participles':'participles','inversion':'inversion',
+    'quantifiers':'quantifiers','subjunctive':'subjunctive',
+    'noun-clauses':'noun-clauses','adverb-time':'adverb-time',
+    'prep-structures':'prep-structures','vocabulary':'vocabulary-context',
+    'vocabulary-context':'vocabulary-context','business-english':'business-english',
+    'part6-strategy':'part6-strategy','part7-strategy':'part7-strategy',
+  };
+
+  function buildGrammarLink(q) {
+    if (!q || q.part !== 5) return '';
+    const grammarId = TYPE_TO_GRAMMAR_ID[q.type];
+    if (!grammarId) return '';
+    const topic = DB.grammar.find(t => t.id === grammarId);
+    if (!topic) return '';
+    return `<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border);">
+      <button onclick="App.goToGrammar('${grammarId}')"
+        style="display:inline-flex;align-items:center;gap:8px;padding:8px 16px;
+               border-radius:var(--radius-sm);width:100%;justify-content:center;
+               background:linear-gradient(135deg,rgba(79,142,247,0.15),rgba(139,92,246,0.15));
+               border:1px solid rgba(79,142,247,0.4);color:var(--accent);
+               font-size:0.85rem;font-weight:600;cursor:pointer;transition:all 0.2s;"
+        onmouseover="this.style.background='linear-gradient(135deg,rgba(79,142,247,0.28),rgba(139,92,246,0.28))'"
+        onmouseout="this.style.background='linear-gradient(135deg,rgba(79,142,247,0.15),rgba(139,92,246,0.15))'">
+        📝 Xem ngữ pháp liên quan: <strong>${topic.icon || '📖'} ${topic.title}</strong>
+      </button>
+    </div>`;
+  }
+
+  function goToGrammar(grammarId) {
+    navigate('grammar');
+    requestAnimationFrame(() => {
+      const btn = document.querySelector(`.grammar-topic-btn[data-id="${grammarId}"]`);
+      if (!btn) return;
+      document.querySelectorAll('.grammar-topic-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      grammarTopic = grammarId;
+      renderGrammarContent();
+      setTimeout(() => {
+        btn.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        btn.style.transition = 'box-shadow 0.3s';
+        btn.style.boxShadow  = '0 0 0 3px rgba(79,142,247,0.6)';
+        setTimeout(() => { btn.style.boxShadow = ''; }, 1500);
+      }, 80);
+    });
+  }
+
+
 
   // ─── Modal ───
   function showModal(content, title = '') {
@@ -585,10 +1015,15 @@ const App = (() => {
     init, navigate,
     showVocabDetail, selectAnswer, closeModal,
     handleHomeworkCode, jumpToQuestion,
+    goToGrammar,
+    startWrongReview, startGrammarDrill,
+    flipCard, rateCard, skipCard, closeFlashcard, restartReviewCards,
     getDB: () => DB,
     getFlatQuestions: () => flatQuestions,
     getUnitMetadata: () => UNIT_METADATA,
-    shuffleArray
+    shuffleArray,
+    seededShuffle,
+    mulberry32,
   };
 })();
 
