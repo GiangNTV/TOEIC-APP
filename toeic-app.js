@@ -162,6 +162,23 @@ const App = (() => {
       const seenCount = (prog.seenIds || []).length;
       unseenEl.textContent = flatQuestions.length > 0 ? Math.max(0, flatQuestions.length - seenCount) : '—';
     }
+    // Grammar mastery stat card
+    const grammarEl = document.getElementById('stat-grammar');
+    if (grammarEl) {
+      const stats   = getGrammarStats();
+      const total   = DB.grammar ? DB.grammar.length : 25;
+      const mastered = DB.grammar
+        ? DB.grammar.filter(t => getGrammarMasteryLevel(t.id) === 'mastered').length
+        : 0;
+      grammarEl.textContent = mastered + '/' + total;
+      const labelEl = document.getElementById('stat-grammar-label');
+      if (labelEl) {
+        const pct = total > 0 ? Math.round(mastered / total * 100) : 0;
+        labelEl.textContent = pct >= 80 ? '🏆 Ngữ pháp thành thạo'
+                            : pct >= 40 ? '📈 Ngữ pháp đang tiến bộ'
+                            : 'Chủ đề đã thành thạo';
+      }
+    }
   }
 
   // ─── Progress (localStorage) ───
@@ -799,13 +816,62 @@ const App = (() => {
     }
   }
 
+  // ─── Grammar Stats (localStorage) ───
+  const GRAMMAR_STATS_KEY = 'toeic_grammar_stats';
+
+  function getGrammarStats() {
+    try { return JSON.parse(localStorage.getItem(GRAMMAR_STATS_KEY) || '{}'); }
+    catch { return {}; }
+  }
+
+  function saveGrammarDrillResult(typeId, correct, total) {
+    const stats = getGrammarStats();
+    if (!stats[typeId]) stats[typeId] = { drills: 0, correct: 0, total: 0, lastDrill: null, history: [] };
+    stats[typeId].drills++;
+    stats[typeId].correct += correct;
+    stats[typeId].total   += total;
+    stats[typeId].lastDrill = Date.now();
+    // Lưu lịch sử 5 lần gần nhất
+    stats[typeId].history = [...(stats[typeId].history || []), { correct, total, ts: Date.now() }].slice(-5);
+    localStorage.setItem(GRAMMAR_STATS_KEY, JSON.stringify(stats));
+  }
+
+  function getGrammarMasteryLevel(typeId) {
+    const stats = getGrammarStats();
+    const s = stats[typeId];
+    if (!s || s.total === 0) return 'new';       // chưa drill lần nào
+    const pct = Math.round(s.correct / s.total * 100);
+    if (pct >= 80 && s.drills >= 2) return 'mastered';   // 🟢
+    if (pct >= 60) return 'learning';                     // 🟡
+    return 'weak';                                         // 🔴
+  }
+
+  function getDaysSinceLastDrill(typeId) {
+    const stats = getGrammarStats();
+    const s = stats[typeId];
+    if (!s || !s.lastDrill) return null;
+    return Math.floor((Date.now() - s.lastDrill) / 864e5);
+  }
+
   // ─── Grammar Page ───
   function setupGrammarPage() {
+    _renderGrammarNav();
+    renderGrammarContent();
+    _renderGrammarSpacedAlert();
+  }
+
+  function _renderGrammarNav() {
     const nav = document.getElementById('grammar-nav');
-    nav.innerHTML = DB.grammar.map(t => `
-      <button class="grammar-topic-btn ${t.id===grammarTopic?'active':''}" data-id="${t.id}">
-        ${t.icon} ${t.title}
-      </button>`).join('');
+    nav.innerHTML = DB.grammar.map(t => {
+      const level = getGrammarMasteryLevel(t.id);
+      const badge = level === 'mastered' ? '<span class="gm-badge gm-mastered">✓</span>'
+                  : level === 'learning' ? '<span class="gm-badge gm-learning">~</span>'
+                  : level === 'weak'     ? '<span class="gm-badge gm-weak">!</span>'
+                  : '';
+      return `<button class="grammar-topic-btn ${t.id===grammarTopic?'active':''}" data-id="${t.id}">
+        ${t.icon} ${t.title}${badge}
+      </button>`;
+    }).join('');
     nav.querySelectorAll('.grammar-topic-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         document.querySelectorAll('.grammar-topic-btn').forEach(b => b.classList.remove('active'));
@@ -814,7 +880,37 @@ const App = (() => {
         renderGrammarContent();
       });
     });
-    renderGrammarContent();
+  }
+
+  function _renderGrammarSpacedAlert() {
+    // Gợi ý ôn lại các topic đã lâu không drill (>5 ngày) hoặc còn yếu
+    const stats = getGrammarStats();
+    const overdue = DB.grammar.filter(t => {
+      const days = getDaysSinceLastDrill(t.id);
+      const level = getGrammarMasteryLevel(t.id);
+      return (days !== null && days >= 5 && level !== 'mastered') || level === 'weak';
+    }).slice(0, 3);
+
+    const alertEl = document.getElementById('grammar-spaced-alert');
+    if (!alertEl) return;
+    if (overdue.length === 0) { alertEl.style.display = 'none'; return; }
+
+    alertEl.style.display = 'block';
+    alertEl.innerHTML = `
+      <div class="grammar-spaced-banner">
+        <span class="spaced-icon">🔔</span>
+        <div class="spaced-content">
+          <strong>Đến lúc ôn lại!</strong>
+          <span>${overdue.map(t => `<button class="spaced-topic-btn" onclick="App.goToGrammar('${t.id}')">${t.icon} ${t.title}</button>`).join('')}</span>
+        </div>
+      </div>`;
+  }
+
+  // Kiểm tra có bài Luyện tập chuyển đổi cho topic này không
+  function _hasTransformDrill(grammarId) {
+    if (typeof TransformDrill === 'undefined') return false;
+    const types = TransformDrill.getAvailableTypes();
+    return !!(types[grammarId] && types[grammarId] > 0);
   }
 
   function renderGrammarContent() {
@@ -822,21 +918,99 @@ const App = (() => {
     const area = document.getElementById('grammar-content-area');
     if (!topic) { area.innerHTML = ''; return; }
 
-    // Count available drill questions for this topic
+    // ── Drill pool ──
     const drillPool = flatQuestions.filter(q => q.part === 5 && q.type === topic.id);
     const drillCount = drillPool.length;
 
+    // ── Grammar stats cho topic này ──
+    const stats = getGrammarStats();
+    const s     = stats[topic.id];
+    const level = getGrammarMasteryLevel(topic.id);
+    const days  = getDaysSinceLastDrill(topic.id);
+
+    // ── Progress bar mini ──
+    let progressHtml = '';
+    if (s && s.total > 0) {
+      const pct = Math.round(s.correct / s.total * 100);
+      const color = pct >= 80 ? 'var(--success)' : pct >= 60 ? 'var(--warning)' : 'var(--danger)';
+      const levelLabel = level === 'mastered' ? '🟢 Thành thạo' : level === 'learning' ? '🟡 Đang học' : '🔴 Cần ôn';
+      const daysText = days === 0 ? 'hôm nay' : days === 1 ? 'hôm qua' : `${days} ngày trước`;
+      progressHtml = `
+        <div class="grammar-progress-bar-wrap">
+          <div class="gpb-top">
+            <span class="gpb-label">${levelLabel} · Đúng ${pct}% (${s.correct}/${s.total} câu · ${s.drills} lần luyện tập)</span>
+            <span class="gpb-date">Lần cuối: ${daysText}</span>
+          </div>
+          <div class="gpb-track"><div class="gpb-fill" style="width:${pct}%;background:${color}"></div></div>
+        </div>`;
+    } else {
+      progressHtml = `<div class="grammar-progress-bar-wrap gpb-empty">⚪ Chưa luyện tập chủ đề này — hãy thử ngay bên dưới!</div>`;
+    }
+
+    // ── Drill banner ──
     const drillBanner = drillCount > 0 ? `
       <div class="grammar-drill-banner">
-        <span style="font-size:0.88rem;color:var(--text-secondary)">
-          📝 <strong style="color:var(--accent-2)">${drillCount} câu</strong> luyện tập cho chủ đề này
-        </span>
-        <button class="btn btn-sm btn-drill" onclick="App.startGrammarDrill('${topic.id}')">
-          ▶ Drill 5 câu
-        </button>
-      </div>` : '';
+        <div class="drill-banner-left">
+          <span style="font-size:0.88rem;color:var(--text-secondary)">
+            📝 <strong style="color:var(--accent-2)">${drillCount} câu</strong> luyện tập cho chủ đề này
+          </span>
+        </div>
+        <div class="drill-banner-right">
+          <button class="btn btn-sm btn-drill" onclick="App.startGrammarDrill('${topic.id}')">▶ Luyện tập nhanh 5 câu</button>
+          ${drillCount >= 10 ? `<button class="btn btn-sm" style="margin-left:6px;background:rgba(139,92,246,0.15);border-color:rgba(139,92,246,0.4);color:var(--accent-2)" onclick="App.startGrammarDrill10('${topic.id}')">🔥 Luyện tập nhanh 10 câu</button>` : ''}
+          ${_hasTransformDrill(topic.id) ? `<button class="btn btn-sm btn-transform-drill" style="margin-left:6px" onclick="TransformDrill.open('${topic.id}')">🔀 Luyện tập chuyển đổi</button>` : ''}
+          ${topic.id === 'word-form' ? `<button class="btn btn-sm btn-word-form-drill" style="margin-left:6px" onclick="WordFormDrill.open()">🔤 Luyện từ loại</button>` : ''}
+          ${drillCount > 0 ? `<button class="btn btn-sm" style="margin-left:6px;background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.4);color:#10b981;font-weight:700" onclick="App.goToPracticeByGrammar('${topic.id}')">🎯 Luyện tập Part 5</button>` : ''}
+        </div>
+      </div>` : `
+      <div class="grammar-drill-banner">
+        <div class="drill-banner-left">
+          <span style="font-size:0.88rem;color:var(--text-muted)">📝 Chưa có câu luyện tập Part 5 cho chủ đề này</span>
+        </div>
+        <div class="drill-banner-right">
+          ${_hasTransformDrill(topic.id) ? `<button class="btn btn-sm btn-transform-drill" onclick="TransformDrill.open('${topic.id}')">🔀 Luyện tập chuyển đổi</button>` : ''}
+          ${topic.id === 'word-form' ? `<button class="btn btn-sm btn-word-form-drill" onclick="WordFormDrill.open()">🔤 Luyện từ loại</button>` : ''}
+        </div>
+      </div>`;
 
-    area.innerHTML = drillBanner + (topic.content || '');
+    // ── Câu hỏi mẫu thực tế (Nâng cấp #1 – Question Breakdown) ──
+    const sampleQs = drillPool.slice(0, 3); // lấy tối đa 3 câu mẫu
+    let breakdownHtml = '';
+    if (sampleQs.length > 0) {
+      const qCards = sampleQs.map((q, idx) => {
+        const opts = ['A','B','C','D'];
+        const optHtml = q.options.map((opt, i) => {
+          const isCorrect = i === q.answer;
+          return `<div class="qb-option ${isCorrect ? 'qb-correct' : 'qb-wrong'}">
+            <span class="qb-letter">${opts[i]}</span>
+            <span class="qb-text">${opt}</span>
+            ${isCorrect ? '<span class="qb-tick">✓</span>' : ''}
+          </div>`;
+        }).join('');
+        return `
+          <div class="qb-card">
+            <div class="qb-num">Câu ${idx+1}</div>
+            <div class="qb-sentence">${q.question || q.sentence || ''}</div>
+            <div class="qb-options">${optHtml}</div>
+            ${q.explanation ? `<div class="qb-explanation">💡 ${q.explanation}</div>` : ''}
+          </div>`;
+      }).join('');
+
+      breakdownHtml = `
+        <div class="grammar-breakdown-section">
+          <div class="breakdown-header">
+            <h3 class="breakdown-title">🎯 Câu hỏi thực tế – Ngữ pháp này trông như thế nào trong đề thi?</h3>
+            <span class="breakdown-sub">Phân tích ${sampleQs.length} câu mẫu từ ngân hàng đề Part 5</span>
+          </div>
+          <div class="qb-list">${qCards}</div>
+          ${drillCount > 3 ? `<p class="breakdown-more">Còn ${drillCount - 3} câu nữa trong ngân hàng đề → <button class="link-btn" onclick="App.startGrammarDrill('${topic.id}')">Luyện tập ngay</button></p>` : ''}
+        </div>`;
+    }
+
+    area.innerHTML = progressHtml + drillBanner + (topic.content || '') + breakdownHtml;
+
+    // Setup inline quiz buttons sau khi inject HTML
+    _setupInlineQuiz(area);
   }
 
   // ─── Practice Page ───
@@ -1015,6 +1189,13 @@ const App = (() => {
     markQuestionsAnswered(quizQuestions, quizUserAnswers);
     updateProgressGamified(quizScore, total);
 
+    // Lưu grammar stats nếu đây là grammar drill (Nâng cấp #2 & #3)
+    if (quizMode === 'grammar-drill' && _grammarDrillTypeId) {
+      saveGrammarDrillResult(_grammarDrillTypeId, quizScore, total);
+      _renderGrammarNav(); // cập nhật badge trên nav
+      _grammarDrillTypeId = null;
+    }
+
     document.getElementById('quiz-container').style.display    = 'none';
     document.getElementById('results-container').style.display = 'block';
 
@@ -1045,7 +1226,7 @@ const App = (() => {
                    : quizMode === 'part6'   ? 'Part 6'
                    : quizMode === 'part7'   ? 'Part 7'
                    : quizMode === 'wrong'   ? 'Ôn câu sai'
-                   : quizMode === 'grammar-drill' ? 'Grammar Drill'
+                   : quizMode === 'grammar-drill' ? 'Luyện tập nhanh'
                    : 'Luyện tập';
     const estEl = document.getElementById('toeic-score-estimate');
     if (estEl) {
@@ -1254,22 +1435,46 @@ const App = (() => {
     showToast(`Bắt đầu ôn ${quizQuestions.length} câu sai`, '🔁');
   }
 
-  // ─── Grammar Mini Drill (5 câu) ───
-  function startGrammarDrill(typeId) {
+  // ─── Inline Quiz (quiz nhỏ trong trang Grammar) ───
+  function _setupInlineQuiz(container) {
+    container.querySelectorAll('.grammar-quiz').forEach(quiz => {
+      quiz.querySelectorAll('.quiz-question').forEach(qEl => {
+        const correct = parseInt(qEl.dataset.answer, 10);
+        const expEl = qEl.querySelector('.quiz-exp');
+        if (expEl) expEl.style.display = 'none';
+        qEl.querySelectorAll('.quiz-opt').forEach(btn => {
+          btn.addEventListener('click', () => {
+            if (qEl.dataset.done) return;
+            qEl.dataset.done = '1';
+            const idx = parseInt(btn.dataset.idx, 10);
+            qEl.querySelectorAll('.quiz-opt').forEach((b, i) => {
+              b.disabled = true;
+              if (i === correct) b.classList.add('quiz-opt-correct');
+              else if (i === idx) b.classList.add('quiz-opt-wrong');
+            });
+            if (expEl) expEl.style.display = 'block';
+          });
+        });
+      });
+    });
+  }
+
+  // ─── Grammar Mini Drill ───
+  function _launchGrammarDrill(typeId, count) {
     const pool = flatQuestions.filter(q => q.part === 5 && q.type === typeId);
     if (pool.length === 0) {
       showToast('Chưa có câu luyện tập cho chủ đề này.', 'ℹ️');
       return;
     }
     const smartPool = buildSmartPool(pool);
-    quizQuestions   = smartPool.slice(0, Math.min(5, smartPool.length));
+    quizQuestions   = smartPool.slice(0, Math.min(count, smartPool.length));
     quizIndex = 0; quizScore = 0; quizAnswered = 0;
     quizUserAnswers = new Array(quizQuestions.length).fill(null);
-    quizTimeLeft    = quizQuestions.length * 50; // ~50 giây / câu cho drill
+    quizTimeLeft    = quizQuestions.length * 50;
     quizMode        = 'grammar-drill';
+    _grammarDrillTypeId = typeId; // lưu lại để save stats khi submit
 
     navigate('practice');
-    // small delay to let page transition complete
     requestAnimationFrame(() => {
       document.getElementById('quiz-setup').style.display      = 'none';
       document.getElementById('quiz-container').style.display  = 'block';
@@ -1278,7 +1483,7 @@ const App = (() => {
 
       const topic    = DB.grammar.find(t => t.id === typeId);
       const partLabel = document.getElementById('quiz-part-label');
-      partLabel.textContent   = 'Drill';
+      partLabel.textContent   = 'Luyện tập nhanh';
       partLabel.className     = 'tag';
       partLabel.style.background = 'rgba(139,92,246,0.25)';
       partLabel.style.color      = 'var(--accent-2)';
@@ -1292,9 +1497,14 @@ const App = (() => {
       startTimer();
       renderQuestionNavigator();
       renderQuestion();
-      showToast(`Drill: ${quizQuestions.length} câu về ${topic ? topic.title : typeId}`, '📝');
+      showToast(`Luyện tập nhanh: ${quizQuestions.length} câu về ${topic ? topic.title : typeId}`, '📝');
     });
   }
+
+  let _grammarDrillTypeId = null;
+
+  function startGrammarDrill(typeId)   { _launchGrammarDrill(typeId, 5);  }
+  function startGrammarDrill10(typeId) { _launchGrammarDrill(typeId, 10); }
 
   // ─── Grammar Link (hiện sau khi chọn đáp án Part 5) ───
   const TYPE_TO_GRAMMAR_ID = {
@@ -1349,6 +1559,42 @@ const App = (() => {
         setTimeout(() => { btn.style.boxShadow = ''; }, 1500);
       }, 80);
     });
+  }
+
+  // Chuyen sang trang Luyen tap va loc Part 5 theo grammar type
+  function goToPracticeByGrammar(grammarId) {
+    const topic = DB.grammar ? DB.grammar.find(t => t.id === grammarId) : null;
+    const label = topic ? topic.title : grammarId;
+    const pool  = flatQuestions.filter(q => q.part === 5 && q.type === grammarId);
+    if (pool.length === 0) { showToast(`Chua co cau Part 5 cho chu de nay.`, "info"); return; }
+    QUIZ_MODES['grammar-focus'] = {
+      label:  'Part 5 – ' + label,
+      filter: q => q.part === 5 && q.type === grammarId,
+      time:   600,
+      count:  30
+    };
+    navigate('practice');
+    setTimeout(() => {
+      const oldCard = document.getElementById('grammar-focus-card');
+      if (oldCard) oldCard.remove();
+      const grid = document.querySelector('.test-options-grid');
+      if (!grid) return;
+      const card = document.createElement('div');
+      card.className    = 'test-option-card grammar-focus-card';
+      card.id           = 'grammar-focus-card';
+      card.dataset.mode = 'grammar-focus';
+      card.innerHTML    = `<div class="opt-icon">🎯</div><h3>Part 5 – ${label}</h3><p>${pool.length} câu chủ đề này · 10 phút</p>`;
+      card.addEventListener('click', () => {
+        document.querySelectorAll('.test-option-card').forEach(c => c.classList.remove('selected'));
+        card.classList.add('selected');
+        quizMode = 'grammar-focus';
+      });
+      grid.appendChild(card);
+      document.querySelectorAll('.test-option-card').forEach(c => c.classList.remove('selected'));
+      card.classList.add('selected');
+      quizMode = 'grammar-focus';
+      card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }, 100);
   }
 
 
@@ -2243,8 +2489,8 @@ const App = (() => {
     init, navigate: navigateGamified,
     showVocabDetail, selectAnswer, closeModal,
     handleHomeworkCode, jumpToQuestion,
-    goToGrammar,
-    startWrongReview, startGrammarDrill,
+    goToGrammar, goToPracticeByGrammar,
+    startWrongReview, startGrammarDrill, startGrammarDrill10,
     flipCard, rateCard, rateCardSRS, skipCard, closeFlashcard, restartReviewCards,
     // Vocab learning modes
     openVocabQuiz, closeVocabQuiz, vqSelect, vqNext,

@@ -52,6 +52,10 @@
       <div class="stat-card"><div class="stat-num" id="stat-tests">0</div><div class="stat-label">Bài thi</div></div>
       <div class="stat-card"><div class="stat-num" id="stat-questions">0</div><div class="stat-label">Câu đã làm</div></div>
       <div class="stat-card"><div class="stat-num" id="stat-accuracy">0%</div><div class="stat-label">Độ chính xác</div></div>
+      <div class="stat-card" style="border-color:rgba(139,92,246,.4);background:rgba(139,92,246,.06);cursor:pointer" onclick="App.navigate('grammar')" title="Xem chi tiết ngữ pháp">
+        <div class="stat-num" id="stat-grammar" style="color:#a78bfa">0/25</div>
+        <div class="stat-label" id="stat-grammar-label">Chủ đề đã thành thạo</div>
+      </div>
       <div class="stat-card" style="border-color:rgba(16,185,129,.4);background:rgba(16,185,129,.06)">
         <div class="stat-num" id="stat-unseen" style="color:#10b981">—</div>
         <div class="stat-label">Câu chưa gặp</div>
@@ -321,6 +325,7 @@
       <p>25 chủ điểm ngữ pháp trọng tâm thường xuất hiện trong Part 5, 6, 7 với giải thích tiếng Việt và ví dụ thực tế.</p>
     </div>
     <div id="grammar-nav" class="grammar-nav"></div>
+    <div id="grammar-spaced-alert"></div>
     <div id="grammar-content-area"></div>
   </div>
 
@@ -472,6 +477,8 @@
 <script src="data/data-questions.js"></script>
 <script src="data/data-questions-extra.js"></script>
 <script src="toeic-app.js"></script>
+<script src="transformation-drill.js"></script>
+<script src="word-form-drill.js"></script>
 <script src="tracker.js"></script>
 <script src="tracker-hook.js"></script>
 </body>
