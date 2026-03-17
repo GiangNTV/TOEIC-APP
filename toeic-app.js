@@ -1263,6 +1263,17 @@ const App = (() => {
   }
 
   function handleHomeworkCode(code) {
+    // Định dạng EXAM: EXAM-P{p5Count}-G{p6Groups}-Q{p7Questions}-{seed}
+    const examMatch = code.match(/EXAM-P(\d+)-G(\d+)-Q(\d+)-(\d+)/i);
+    if (examMatch) {
+      const p5Count = parseInt(examMatch[1]);
+      const p6Groups = parseInt(examMatch[2]);
+      const p7Questions = parseInt(examMatch[3]);
+      const seed = parseInt(examMatch[4]);
+      generateExamFromCode(p5Count, p6Groups, p7Questions, seed);
+      return;
+    }
+    
     // Định dạng chuẩn: HW-UNIT-{unitId}-{seed}
     const match = code.match(/HW-UNIT-(\d+)-(\d+)/i);
     if (match) {
@@ -1273,7 +1284,7 @@ const App = (() => {
       if (fallback) {
         showToast('Mã cũ — không có seed. Vui lòng dùng mã mới từ giáo viên (VD: HW-UNIT-1-4823)', '⚠️');
       } else {
-        showToast('Mã không hợp lệ. Định dạng: HW-UNIT-1-4823', '⚠️');
+        showToast('Mã không hợp lệ. Định dạng: HW-UNIT-1-4823 hoặc EXAM-P30-G4-Q54-123456', '⚠️');
       }
     }
   }
@@ -1370,6 +1381,96 @@ const App = (() => {
       showToast(`✅ Đã tải bộ câu hỏi Unit ${unitId}`, '📝');
     }
 
+    startTimer();
+    renderQuestionNavigator();
+    renderQuestion();
+  }
+
+  // ─── Generate Exam from Code (Mock Test) ───
+  function generateExamFromCode(p5Count, p6Groups, p7Questions, seed) {
+    // Dùng cùng logic với teacher để tái tạo đúng đề thi
+    
+    // Part 5: seeded shuffle
+    const p5pool = seededShuffle([...DB.questions.part5], seed);
+    const selectedP5 = p5pool.slice(0, Math.min(p5Count, p5pool.length));
+    
+    // Part 6: seeded shuffle
+    const p6groupsPool = DB.questions.part6.filter(g => g.questions.length === 4);
+    const selectedP6 = seededShuffle(p6groupsPool, seed + 1).slice(0, Math.min(p6Groups, p6groupsPool.length));
+    
+    // Part 7: seeded shuffle theo loại (cùng logic với teacher)
+    const p7singles = seededShuffle(DB.questions.part7.filter(g => g.type === 'single' || !g.type), seed + 2);
+    const p7doubles = seededShuffle(DB.questions.part7.filter(g => g.type === 'double'), seed + 3);
+    const p7triples = seededShuffle(DB.questions.part7.filter(g => g.type === 'triple'), seed + 4);
+    
+    const selectedP7 = [];
+    let p7count = 0;
+    const addP7 = list => {
+      for (const g of list) {
+        if (p7count + g.questions.length <= p7Questions) { 
+          selectedP7.push(g); 
+          p7count += g.questions.length; 
+        }
+      }
+    };
+    addP7(p7triples.slice(0, 3));
+    addP7(p7doubles.slice(0, 2));
+    addP7(p7singles);
+    
+    // Flatten các câu hỏi
+    quizQuestions = [];
+    selectedP5.forEach(q => quizQuestions.push({...q, part: 5}));
+    selectedP6.forEach(grp => {
+      grp.questions.forEach(q => quizQuestions.push({
+        ...q, 
+        part: 6, 
+        passage: grp.passage, 
+        passageTitle: grp.passageTitle,
+        type: grp.type
+      }));
+    });
+    selectedP7.forEach(grp => {
+      grp.questions.forEach(q => quizQuestions.push({
+        ...q, 
+        part: 7, 
+        passage: grp.passage, 
+        passageTitle: grp.passageTitle,
+        type: grp.type
+      }));
+    });
+    
+    if (quizQuestions.length === 0) {
+      showToast('❌ Không thể tải đề thi. Vui lòng kiểm tra mã.', '⚠️');
+      return;
+    }
+    
+    // Setup quiz state
+    quizIndex = 0; 
+    quizScore = 0; 
+    quizAnswered = 0;
+    quizUserAnswers = new Array(quizQuestions.length).fill(null);
+    quizTimeLeft = 4500; // 75 phút cho full Reading
+    quizMode = 'mock-exam';
+    
+    document.getElementById('quiz-setup').style.display = 'none';
+    document.getElementById('quiz-container').style.display = 'block';
+    document.getElementById('results-container').style.display = 'none';
+    document.getElementById('quiz-total').textContent = quizQuestions.length;
+    
+    const partLabel = document.getElementById('quiz-part-label');
+    partLabel.textContent = 'Mock Test';
+    partLabel.className = 'tag';
+    partLabel.style.background = '#dc2626';
+    partLabel.style.color = '#fff';
+    
+    const unseenBadge = document.getElementById('quiz-unseen-badge');
+    if (unseenBadge) {
+      unseenBadge.textContent = `📝 Full Reading: ${selectedP5.length} P5 + ${selectedP6.reduce((s,g) => s + g.questions.length, 0)} P6 + ${selectedP7.reduce((s,g) => s + g.questions.length, 0)} P7`;
+      unseenBadge.style.display = 'inline-block';
+    }
+    
+    showToast(`✅ Đã tải Mock Test (${quizQuestions.length} câu)`, '📝');
+    
     startTimer();
     renderQuestionNavigator();
     renderQuestion();
@@ -2502,9 +2603,11 @@ const App = (() => {
     getDB: () => DB,
     getFlatQuestions: () => flatQuestions,
     getUnitMetadata: () => UNIT_METADATA,
+    getCurrentUnitId: () => _currentUnitId,
     shuffleArray,
     seededShuffle,
     mulberry32,
+    generateExamFromCode,
   };
 })();
 
