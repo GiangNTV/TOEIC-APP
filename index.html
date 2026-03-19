@@ -89,6 +89,13 @@
           <div class="wotd-word" id="wotd-word">—</div>
           <div class="wotd-phonetic" id="wotd-phonetic"></div>
           <span class="wotd-type" id="wotd-type"></span>
+          <button id="wotd-speak-btn" title="Phát âm"
+            style="display:none;margin-top:8px;align-items:center;gap:5px;
+                   background:rgba(79,142,247,0.12);border:1px solid rgba(79,142,247,0.35);
+                   border-radius:16px;padding:4px 14px;cursor:pointer;
+                   color:var(--accent);font-size:0.82rem;font-weight:600;">
+            🔊 Phát âm
+          </button>
         </div>
         <div style="flex:2;min-width:200px">
           <div class="wotd-meaning" id="wotd-meaning"></div>
@@ -162,163 +169,49 @@
 
   <!-- ─── VOCAB PAGE ─── -->
   <div class="page" id="page-vocab">
-    <div class="section-header">
-      <h1>📚 Từ vựng TOEIC</h1>
-      <p>Từ vựng được phân loại theo chủ đề thường gặp trong đề thi ETS. Nhấn vào thẻ để xem chi tiết.</p>
+    <!-- Dictionary Hero -->
+    <div class="dict-hero">
+      <div class="dict-hero-left">
+        <div class="dict-hero-title">📖 Từ điển TOEIC</div>
+        <div class="dict-hero-sub">Tra cứu tức thì · Lọc theo trạng thái · Luyện tập đa dạng</div>
+      </div>
+      <div class="dict-hero-stats" id="dict-hero-stats">
+        <div class="dict-stat-pill dict-stat-known"><span id="dict-stat-known-num">0</span><span>Đã thuộc</span></div>
+        <div class="dict-stat-pill dict-stat-review"><span id="dict-stat-review-num">0</span><span>Cần ôn</span></div>
+        <div class="dict-stat-pill dict-stat-new"><span id="dict-stat-new-num">0</span><span>Chưa học</span></div>
+      </div>
     </div>
-    <!-- Vocab mode buttons -->
+
+    <!-- Search bar – prominent -->
+    <div class="dict-search-wrap">
+      <span class="dict-search-icon">🔍</span>
+      <input id="vocab-search" type="text" class="dict-search-input" placeholder="Tìm từ bất kỳ — nhập tiếng Anh hoặc tiếng Việt...">
+      <span id="vocab-count" class="dict-search-count"></span>
+    </div>
+
+    <!-- Practice modes -->
     <div class="vocab-mode-bar">
-      <button id="btn-flashcard" class="vocab-mode-btn active-mode" data-mode="flashcard">🃏 Flashcard</button>
+      <button id="btn-flashcard" class="vocab-mode-btn active-mode" data-mode="flashcard">🃏 Flashcard SRS</button>
       <button id="btn-vocab-quiz" class="vocab-mode-btn" data-mode="quiz" onclick="App.openVocabQuiz()">❓ Quiz 4 đáp án</button>
       <button id="btn-vocab-fill" class="vocab-mode-btn" data-mode="fill" onclick="App.openVocabFill()">✏️ Điền từ</button>
       <button id="btn-vocab-match" class="vocab-mode-btn" data-mode="match" onclick="App.openVocabMatch()">🔗 Ghép cặp</button>
-    </div>
-    <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap;">
-      <div style="flex:1;min-width:200px;position:relative;">
-        <input id="vocab-search" type="text" placeholder="🔍 Tìm từ vựng..." style="width:100%;padding:10px 16px;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text-primary);font-family:'Inter',sans-serif;font-size:0.9rem;outline:none;">
-      </div>
-      <span id="vocab-count" style="color:var(--text-muted);font-size:0.85rem;white-space:nowrap"></span>
+      <button id="btn-speed-round" class="vocab-mode-btn" data-mode="speed" onclick="App.openSpeedRound()">⚡ Speed Round</button>
+      <button id="btn-word-chain" class="vocab-mode-btn" data-mode="chain" onclick="App.openWordChain()">🧩 Word Chain</button>
     </div>
 
-    <!-- Flashcard Overlay -->
-    <div id="flashcard-overlay" style="display:none;position:fixed;inset:0;z-index:500;background:rgba(10,12,20,0.92);backdrop-filter:blur(8px);flex-direction:column;align-items:center;justify-content:center;padding:20px;">
-      <div style="width:100%;max-width:480px">
-        <!-- Header -->
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
-          <div>
-            <span id="fc-category-label" class="badge badge-cyan" style="font-size:0.72rem"></span>
-            <span id="fc-progress-text" style="color:var(--text-muted);font-size:0.82rem;margin-left:10px"></span>
-          </div>
-          <button onclick="App.closeFlashcard()" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:1.2rem;padding:4px">✕</button>
-        </div>
-        <!-- Progress bar -->
-        <div style="background:var(--bg-secondary);border-radius:99px;height:4px;margin-bottom:24px;overflow:hidden">
-          <div id="fc-progress-bar" style="height:100%;background:linear-gradient(90deg,var(--accent-3),var(--accent));border-radius:99px;transition:width 0.4s ease;width:0%"></div>
-        </div>
-        <!-- Card -->
-        <div id="fc-card" class="fc-card" onclick="App.flipCard()">
-          <div class="fc-inner" id="fc-inner">
-            <div class="fc-front">
-              <div id="fc-word" class="fc-word"></div>
-              <div id="fc-phonetic" class="fc-phonetic"></div>
-              <div id="fc-type" class="fc-type-tag"></div>
-              <div class="fc-hint">Nhấn để xem nghĩa</div>
-            </div>
-            <div class="fc-back">
-              <div id="fc-meaning" class="fc-meaning"></div>
-              <div id="fc-example" class="fc-example"></div>
-            </div>
-          </div>
-        </div>
-        <!-- Buttons (shown after flip) -->
-        <div id="fc-actions" style="display:none;margin-top:20px;display:none">
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-            <button class="btn fc-btn-wrong" onclick="App.rateCard('wrong')">🔄 Cần ôn</button>
-            <button class="btn fc-btn-right" onclick="App.rateCard('right')">✓ Biết rồi</button>
-          </div>
-          <button class="btn btn-outline btn-sm" onclick="App.skipCard()" style="width:100%;margin-top:10px;font-size:0.8rem;color:var(--text-muted)">Bỏ qua →</button>
-        </div>
-        <!-- Stats row -->
-        <div style="display:flex;justify-content:center;gap:24px;margin-top:18px;font-size:0.8rem;color:var(--text-muted)">
-          <span>✓ <span id="fc-known-count">0</span> biết</span>
-          <span>🔄 <span id="fc-review-count">0</span> cần ôn</span>
-          <span>— <span id="fc-skip-count">0</span> bỏ qua</span>
-        </div>
-      </div>
+    <!-- Smart status filters -->
+    <div class="dict-status-filters" id="dict-status-filters">
+      <button class="dict-status-btn active" data-status="all">Tất cả</button>
+      <button class="dict-status-btn" data-status="new">🆕 Chưa học</button>
+      <button class="dict-status-btn" data-status="review">🔄 Cần ôn lại</button>
+      <button class="dict-status-btn" data-status="known">✅ Đã thuộc</button>
     </div>
+
+    <!-- Category filters -->
     <div id="vocab-filters" class="vocab-filters"></div>
-    <div id="vocab-grid" class="vocab-grid"></div>
-
-    <!-- ── Vocab Quiz Overlay (4-choice) ── -->
-    <div id="vquiz-overlay" class="vocab-overlay-base">
-      <div class="vocab-overlay-panel">
-        <div class="vocab-overlay-header">
-          <div>
-            <span class="badge badge-cyan" id="vq-category"></span>
-            <span style="color:var(--text-muted);font-size:0.82rem;margin-left:10px" id="vq-progress"></span>
-          </div>
-          <button onclick="App.closeVocabQuiz()" class="overlay-close-btn">✕</button>
-        </div>
-        <div style="background:var(--bg-secondary);border-radius:99px;height:4px;margin-bottom:20px;overflow:hidden">
-          <div id="vq-progress-bar" style="height:100%;background:linear-gradient(90deg,var(--accent-3),var(--accent));border-radius:99px;transition:width 0.4s ease;width:0%"></div>
-        </div>
-        <div class="vquiz-question-box">
-          <div class="vquiz-prompt">Chọn nghĩa đúng của từ:</div>
-          <div class="vquiz-word" id="vq-word"></div>
-          <div class="vquiz-phonetic" id="vq-phonetic"></div>
-          <div class="vquiz-type" id="vq-type"></div>
-        </div>
-        <div id="vq-options" class="vquiz-options"></div>
-        <div id="vq-result-box" class="vquiz-result-box" style="display:none"></div>
-        <div id="vq-example-box" class="vquiz-example-row" style="display:none"></div>
-        <div id="vq-next-wrap" style="display:none;margin-top:16px;text-align:center">
-          <button class="btn btn-primary" onclick="App.vqNext()">Câu tiếp →</button>
-        </div>
-        <div class="vquiz-stats-row">
-          <span>✓ <span id="vq-correct">0</span> đúng</span>
-          <span>✗ <span id="vq-wrong">0</span> sai</span>
-          <span>📊 <span id="vq-streak">0</span> streak</span>
-        </div>
-      </div>
-    </div>
-
-    <!-- ── Fill in the Blank Overlay ── -->
-    <div id="vfill-overlay" class="vocab-overlay-base">
-      <div class="vocab-overlay-panel">
-        <div class="vocab-overlay-header">
-          <div>
-            <span class="badge badge-purple" id="vf-category"></span>
-            <span style="color:var(--text-muted);font-size:0.82rem;margin-left:10px" id="vf-progress"></span>
-          </div>
-          <button onclick="App.closeVocabFill()" class="overlay-close-btn">✕</button>
-        </div>
-        <div style="background:var(--bg-secondary);border-radius:99px;height:4px;margin-bottom:20px;overflow:hidden">
-          <div id="vf-progress-bar" style="height:100%;background:linear-gradient(90deg,var(--accent-2),var(--accent));border-radius:99px;transition:width 0.4s ease;width:0%"></div>
-        </div>
-        <div class="vfill-prompt">Điền từ còn thiếu vào câu ví dụ:</div>
-        <div class="vfill-sentence" id="vf-sentence"></div>
-        <div class="vfill-phonetic-hint" id="vf-phonetic-hint"></div>
-        <!-- 4-choice fill: same feel as Part 5 -->
-        <div id="vf-options" class="vquiz-options" style="margin-top:16px"></div>
-        <div id="vf-result-box" class="vquiz-result-box" style="display:none"></div>
-        <div id="vf-next-wrap" style="display:none;margin-top:16px;text-align:center">
-          <button class="btn btn-primary" onclick="App.vfNext()">Câu tiếp →</button>
-        </div>
-        <div class="vquiz-stats-row">
-          <span>✓ <span id="vf-correct">0</span> đúng</span>
-          <span>✗ <span id="vf-wrong">0</span> sai</span>
-        </div>
-      </div>
-    </div>
-
-    <!-- ── Matching Overlay ── -->
-    <div id="vmatch-overlay" class="vocab-overlay-base">
-      <div class="vocab-overlay-panel" style="max-width:640px">
-        <div class="vocab-overlay-header">
-          <div>
-            <span class="badge badge-blue" id="vm-title">Ghép cặp từ vựng</span>
-            <span style="color:var(--text-muted);font-size:0.82rem;margin-left:10px" id="vm-round"></span>
-          </div>
-          <button onclick="App.closeVocabMatch()" class="overlay-close-btn">✕</button>
-        </div>
-        <div style="font-size:0.8rem;color:var(--text-secondary);margin-bottom:16px">Nhấn một từ tiếng Anh rồi nhấn nghĩa tương ứng để ghép cặp.</div>
-        <div id="vm-board" class="vmatch-board"></div>
-        <div id="vm-result" style="display:none;text-align:center;padding:24px 0">
-          <div style="font-size:2rem;margin-bottom:8px">🎉</div>
-          <div style="font-size:1.1rem;font-weight:700;margin-bottom:4px">Hoàn thành vòng!</div>
-          <div style="color:var(--text-secondary);font-size:0.88rem;margin-bottom:16px" id="vm-score-msg"></div>
-          <button class="btn btn-primary" onclick="App.vmNewRound()">Vòng tiếp theo →</button>
-          <button class="btn btn-outline" onclick="App.closeVocabMatch()" style="margin-left:10px">Đóng</button>
-        </div>
-        <div class="vquiz-stats-row" id="vm-stats-row">
-          <span>✓ <span id="vm-matched">0</span> / <span id="vm-total-pairs">0</span> cặp</span>
-          <span>❌ <span id="vm-errors">0</span> lỗi</span>
-        </div>
-      </div>
-    </div>
+    <div id="vocab-grid" class="dict-list"></div>
   </div>
 
-  <!-- ─── GRAMMAR PAGE ─── -->
   <div class="page" id="page-grammar">
     <div class="section-header">
       <h1>📝 Ngữ pháp TOEIC</h1>
@@ -436,13 +329,25 @@
   </div>
 <!-- ─── UNITS PAGE ─── -->
   <div class="page" id="page-units">
-    <div class="section-header">
-      <h1>📖 Học theo Unit</h1>
-      <p>Ôn từ vựng + ngữ pháp theo chủ đề có hệ thống. Nhấn vào Unit để xem toàn bộ từ vựng và luyện tập.</p>
+    <div class="roadmap-hero">
+      <div class="roadmap-hero-inner">
+        <div class="roadmap-hero-icon">🗺️</div>
+        <div>
+          <div class="roadmap-hero-title">Lộ trình học theo Unit</div>
+          <div class="roadmap-hero-sub">Hoàn thành từng unit theo thứ tự · Từ vựng + Ngữ pháp tích hợp · Theo dõi tiến độ rõ ràng</div>
+        </div>
+      </div>
+      <div id="roadmap-progress-wrap" class="roadmap-overall-progress">
+        <div class="roadmap-progress-label">
+          <span id="roadmap-done-count">0</span><span style="color:var(--text-muted)">/ 23 units hoàn thành</span>
+        </div>
+        <div class="roadmap-progress-bar-bg">
+          <div id="roadmap-progress-bar" class="roadmap-progress-bar-fill" style="width:0%"></div>
+        </div>
+      </div>
     </div>
     <div id="units-header"></div>
-    <div id="units-grid" class="unit-grid"></div>
-    <div id="unit-detail" style="display:none"></div>
+    <div id="units-grid" class="unit-card-grid"></div>
   </div>
 
   <!-- ─── STATS PAGE ─── -->
@@ -454,6 +359,10 @@
     <div id="stats-content"></div>
   </div>
 
+</div>
+<!-- ─── UNIT DETAIL SLIDE-IN PANEL — outside #app ─── -->
+<div id="unit-detail-overlay" style="display:none;position:fixed;inset:0;z-index:900;background:rgba(0,0,0,0.5);backdrop-filter:blur(4px);justify-content:flex-end;align-items:stretch;" onclick="if(event.target===this)App.closeUnitPanel()">
+  <div id="unit-detail-panel" class="udp-panel"></div>
 </div>
 <div id="app-modal" style="display:none;position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,0.65);backdrop-filter:blur(6px);align-items:center;justify-content:center;padding:20px;">
   <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:28px;max-width:500px;width:100%;position:relative;animation:fadeUp 0.25s ease;">
@@ -470,16 +379,208 @@
 </script>
 <div class="toast" id="toast"></div>
 
+<!-- ═══ FAB — Bắt đầu luyện tập (chỉ hiện ở trang Home) ═══ -->
+<button id="home-fab" aria-label="Bắt đầu luyện tập" onclick="App.navigate('practice')">
+  <span class="fab-icon">✏️</span>
+  <span class="fab-label">Luyện tập</span>
+</button>
+
+<!-- ═══ ALL OVERLAYS — outside #app so they are never hidden by .page CSS ═══ -->
+
+<!-- Flashcard Overlay -->
+<div id="flashcard-overlay" style="display:none;position:fixed;inset:0;z-index:800;background:rgba(10,12,20,0.92);backdrop-filter:blur(8px);flex-direction:column;align-items:center;justify-content:center;padding:20px;">
+  <div style="width:100%;max-width:480px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+      <div>
+        <span id="fc-category-label" class="badge badge-cyan" style="font-size:0.72rem"></span>
+        <span id="fc-progress-text" style="color:var(--text-muted);font-size:0.82rem;margin-left:10px"></span>
+      </div>
+      <button onclick="App.closeFlashcard()" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:1.2rem;padding:4px">✕</button>
+    </div>
+    <div style="background:var(--bg-secondary);border-radius:99px;height:4px;margin-bottom:24px;overflow:hidden">
+      <div id="fc-progress-bar" style="height:100%;background:linear-gradient(90deg,var(--accent-3),var(--accent));border-radius:99px;transition:width 0.4s ease;width:0%"></div>
+    </div>
+    <div id="fc-card" class="fc-card" onclick="App.flipCard()">
+      <div class="fc-inner" id="fc-inner">
+        <div class="fc-front">
+          <div id="fc-word" class="fc-word"></div>
+          <div id="fc-phonetic" class="fc-phonetic"></div>
+          <div id="fc-type" class="fc-type-tag"></div>
+          <div class="fc-hint">Nhấn để xem nghĩa</div>
+        </div>
+        <div class="fc-back">
+          <div id="fc-meaning" class="fc-meaning"></div>
+          <div id="fc-example" class="fc-example"></div>
+        </div>
+      </div>
+    </div>
+    <div id="fc-actions" style="display:none;margin-top:20px"></div>
+    <div style="display:flex;justify-content:center;gap:24px;margin-top:18px;font-size:0.8rem;color:var(--text-muted)">
+      <span>✓ <span id="fc-known-count">0</span> biết</span>
+      <span>🔄 <span id="fc-review-count">0</span> cần ôn</span>
+      <span>— <span id="fc-skip-count">0</span> bỏ qua</span>
+    </div>
+  </div>
+</div>
+
+<!-- Vocab Quiz Overlay -->
+<div id="vquiz-overlay" class="vocab-overlay-base" style="z-index:800">
+  <div class="vocab-overlay-panel">
+    <div class="vocab-overlay-header">
+      <div>
+        <span class="badge badge-cyan" id="vq-category"></span>
+        <span style="color:var(--text-muted);font-size:0.82rem;margin-left:10px" id="vq-progress"></span>
+      </div>
+      <button onclick="App.closeVocabQuiz()" class="overlay-close-btn">✕</button>
+    </div>
+    <div style="background:var(--bg-secondary);border-radius:99px;height:4px;margin-bottom:20px;overflow:hidden">
+      <div id="vq-progress-bar" style="height:100%;background:linear-gradient(90deg,var(--accent-3),var(--accent));border-radius:99px;transition:width 0.4s ease;width:0%"></div>
+    </div>
+    <div class="vquiz-question-box">
+      <div class="vquiz-prompt">Chọn nghĩa đúng của từ:</div>
+      <div class="vquiz-word" id="vq-word"></div>
+      <div class="vquiz-phonetic" id="vq-phonetic"></div>
+      <div class="vquiz-type" id="vq-type"></div>
+    </div>
+    <div id="vq-options" class="vquiz-options"></div>
+    <div id="vq-result-box" class="vquiz-result-box" style="display:none"></div>
+    <div id="vq-example-box" class="vquiz-example-row" style="display:none"></div>
+    <div id="vq-next-wrap" style="display:none;margin-top:16px;text-align:center">
+      <button class="btn btn-primary" onclick="App.vqNext()">Câu tiếp →</button>
+    </div>
+    <div class="vquiz-stats-row">
+      <span>✓ <span id="vq-correct">0</span> đúng</span>
+      <span>✗ <span id="vq-wrong">0</span> sai</span>
+      <span>📊 <span id="vq-streak">0</span> streak</span>
+    </div>
+  </div>
+</div>
+
+<!-- Fill in the Blank Overlay -->
+<div id="vfill-overlay" class="vocab-overlay-base" style="z-index:800">
+  <div class="vocab-overlay-panel">
+    <div class="vocab-overlay-header">
+      <div>
+        <span class="badge badge-purple" id="vf-category"></span>
+        <span style="color:var(--text-muted);font-size:0.82rem;margin-left:10px" id="vf-progress"></span>
+      </div>
+      <button onclick="App.closeVocabFill()" class="overlay-close-btn">✕</button>
+    </div>
+    <div style="background:var(--bg-secondary);border-radius:99px;height:4px;margin-bottom:20px;overflow:hidden">
+      <div id="vf-progress-bar" style="height:100%;background:linear-gradient(90deg,var(--accent-2),var(--accent));border-radius:99px;transition:width 0.4s ease;width:0%"></div>
+    </div>
+    <div class="vfill-prompt">Điền từ còn thiếu vào câu ví dụ:</div>
+    <div class="vfill-sentence" id="vf-sentence"></div>
+    <div class="vfill-phonetic-hint" id="vf-phonetic-hint"></div>
+    <div id="vf-options" class="vquiz-options" style="margin-top:16px"></div>
+    <div id="vf-result-box" class="vquiz-result-box" style="display:none"></div>
+    <div id="vf-next-wrap" style="display:none;margin-top:16px;text-align:center">
+      <button class="btn btn-primary" onclick="App.vfNext()">Câu tiếp →</button>
+    </div>
+    <div class="vquiz-stats-row">
+      <span>✓ <span id="vf-correct">0</span> đúng</span>
+      <span>✗ <span id="vf-wrong">0</span> sai</span>
+    </div>
+  </div>
+</div>
+
+<!-- Matching Overlay -->
+<div id="vmatch-overlay" class="vocab-overlay-base" style="z-index:800">
+  <div class="vocab-overlay-panel" style="max-width:640px">
+    <div class="vocab-overlay-header">
+      <div>
+        <span class="badge badge-blue" id="vm-title">Ghép cặp từ vựng</span>
+        <span style="color:var(--text-muted);font-size:0.82rem;margin-left:10px" id="vm-round"></span>
+      </div>
+      <button onclick="App.closeVocabMatch()" class="overlay-close-btn">✕</button>
+    </div>
+    <div style="font-size:0.8rem;color:var(--text-secondary);margin-bottom:16px">Nhấn một từ tiếng Anh rồi nhấn nghĩa tương ứng để ghép cặp.</div>
+    <div id="vm-board" class="vmatch-board"></div>
+    <div id="vm-result" style="display:none;text-align:center;padding:24px 0">
+      <div style="font-size:2rem;margin-bottom:8px">🎉</div>
+      <div style="font-size:1.1rem;font-weight:700;margin-bottom:4px">Hoàn thành vòng!</div>
+      <div style="color:var(--text-secondary);font-size:0.88rem;margin-bottom:16px" id="vm-score-msg"></div>
+      <button class="btn btn-primary" onclick="App.vmNewRound()">Vòng tiếp theo →</button>
+      <button class="btn btn-outline" onclick="App.closeVocabMatch()" style="margin-left:10px">Đóng</button>
+    </div>
+    <div class="vquiz-stats-row" id="vm-stats-row">
+      <span>✓ <span id="vm-matched">0</span> / <span id="vm-total-pairs">0</span> cặp</span>
+      <span>❌ <span id="vm-errors">0</span> lỗi</span>
+    </div>
+  </div>
+</div>
+
+<!-- Speed Round Overlay -->
+<div id="vspeed-overlay" class="vocab-overlay-base" style="z-index:800">
+  <div class="vocab-overlay-panel" style="max-width:520px">
+    <div class="vocab-overlay-header">
+      <div>
+        <span class="badge" style="background:rgba(251,191,36,.15);color:#fbbf24;border:1px solid rgba(251,191,36,.3)">⚡ Speed Round</span>
+        <span style="color:var(--text-muted);font-size:.82rem;margin-left:10px" id="vsr-round-label"></span>
+      </div>
+      <button onclick="App.closeSpeedRound()" class="overlay-close-btn">✕</button>
+    </div>
+    <div style="height:6px;background:var(--bg-secondary);border-radius:99px;margin-bottom:18px;overflow:hidden">
+      <div id="vsr-timer-bar" style="height:100%;border-radius:99px;background:linear-gradient(90deg,#fbbf24,#f59e0b);transition:width .1s linear;width:100%"></div>
+    </div>
+    <div id="vsr-word-area" style="text-align:center;margin-bottom:20px">
+      <div id="vsr-word" style="font-size:2rem;font-weight:900;color:var(--text-primary);margin-bottom:6px"></div>
+      <div id="vsr-phonetic" style="font-family:'JetBrains Mono',monospace;color:var(--accent-3);font-size:.9rem"></div>
+      <div id="vsr-type" style="font-size:.7rem;font-weight:700;text-transform:uppercase;color:var(--accent-2);margin-top:4px"></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px">
+      <button id="vsr-btn-true" class="vsr-choice-btn vsr-true" onclick="App.vsrAnswer(true)">✓ Đúng</button>
+      <button id="vsr-btn-false" class="vsr-choice-btn vsr-false" onclick="App.vsrAnswer(false)">✗ Sai</button>
+    </div>
+    <div id="vsr-meaning-shown" style="text-align:center;font-size:.88rem;color:var(--text-secondary);min-height:1.4em;margin-bottom:10px"></div>
+    <div id="vsr-feedback" style="text-align:center;font-size:1rem;font-weight:800;min-height:1.5em;margin-bottom:8px"></div>
+    <div class="vquiz-stats-row">
+      <span>✅ <span id="vsr-correct">0</span> đúng</span>
+      <span>❌ <span id="vsr-wrong">0</span> sai</span>
+      <span>🔥 <span id="vsr-streak">0</span> streak</span>
+      <span>⏱ <span id="vsr-remaining">10</span> từ còn lại</span>
+    </div>
+  </div>
+</div>
+
+<!-- Word Chain Overlay -->
+<div id="vchain-overlay" class="vocab-overlay-base" style="z-index:800">
+  <div class="vocab-overlay-panel" style="max-width:600px">
+    <div class="vocab-overlay-header">
+      <div>
+        <span class="badge" style="background:rgba(139,92,246,.15);color:#a78bfa;border:1px solid rgba(139,92,246,.3)">🧩 Word Chain</span>
+        <span style="color:var(--text-muted);font-size:.82rem;margin-left:10px" id="vwc-progress"></span>
+      </div>
+      <button onclick="App.closeWordChain()" class="overlay-close-btn">✕</button>
+    </div>
+    <div style="background:var(--bg-secondary);border-radius:99px;height:4px;margin-bottom:18px;overflow:hidden">
+      <div id="vwc-progress-bar" style="height:100%;background:linear-gradient(90deg,var(--accent-2),var(--accent));border-radius:99px;transition:width .4s ease;width:0%"></div>
+    </div>
+    <div style="font-size:.78rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;font-weight:700">Điền từ vào chỗ trống:</div>
+    <div id="vwc-sentence" class="vwc-sentence"></div>
+    <div id="vwc-context-hint" class="vwc-context-hint"></div>
+    <div style="font-size:.75rem;color:var(--text-muted);margin:14px 0 8px;font-weight:600">Ngân hàng từ:</div>
+    <div id="vwc-word-bank" class="vwc-word-bank"></div>
+    <div id="vwc-result-box" class="vquiz-result-box" style="display:none;margin-top:14px"></div>
+    <div id="vwc-next-wrap" style="display:none;margin-top:12px;text-align:center">
+      <button class="btn btn-primary" onclick="App.vwcNext()">Câu tiếp →</button>
+    </div>
+    <div class="vquiz-stats-row" style="margin-top:14px">
+      <span>✅ <span id="vwc-correct">0</span> đúng</span>
+      <span>❌ <span id="vwc-wrong">0</span> sai</span>
+    </div>
+  </div>
+</div>
+
 <!-- ─── Data (works offline + online) ─── -->
 <script src="data/data-vocab.js"></script>
-<script src="data/data-vocab-extra.js"></script>
+
 <script src="data/data-grammar.js"></script>
 <script src="data/data-questions.js"></script>
-<script src="data/data-questions-extra.js"></script>
+
 <script src="toeic-app.js"></script>
 <script src="transformation-drill.js"></script>
 <script src="word-form-drill.js"></script>
-<script src="tracker.js"></script>
-<script src="tracker-hook.js"></script>
+
 </body>
 </html>

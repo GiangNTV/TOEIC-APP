@@ -24,29 +24,29 @@ const App = (() => {
   };
 
   const UNIT_METADATA = [
-    { id:1,  title:"Business Foundations",    vocab:["Office","Business"],                       grammar:"verb-tense"         },
-    { id:2,  title:"Office Life",             vocab:["HR","Office"],                             grammar:"passive"            },
-    { id:3,  title:"Personnel & HR",          vocab:["HR","Leadership"],                         grammar:"conditionals"       },
-    { id:4,  title:"Marketing & Sales",       vocab:["Marketing","Sales"],                       grammar:"word-form"          },
-    { id:5,  title:"Finance & Budget",        vocab:["Finance","Accounting"],                    grammar:"preposition"        },
-    { id:6,  title:"Tech & Innovation",       vocab:["Tech","Digital"],                          grammar:"conjunction"        },
-    { id:7,  title:"Manufacturing & QC",      vocab:["Manufacturing","Supply Chain"],            grammar:"pronoun"            },
-    { id:8,  title:"Travel & Tourism",        vocab:["Travel"],                                  grammar:"relative-clause"    },
-    { id:9,  title:"Corporate Events",        vocab:["Events"],                                  grammar:"modal"              },
-    { id:10, title:"Customer Service",        vocab:["Customer Service"],                        grammar:"gerund-infinitive"  },
-    { id:11, title:"Logistics & Shipping",    vocab:["Supply Chain","Insurance"],                grammar:"comparison"         },
-    { id:12, title:"Health & Safety",         vocab:["Healthcare","Safety"],                     grammar:"participles"        },
-    { id:13, title:"Banking & Investment",    vocab:["Finance","Accounting"],                    grammar:"subject-verb"       },
-    { id:14, title:"Real Estate",             vocab:["Property"],                                grammar:"noun-clauses"       },
-    { id:15, title:"Media & Communications", vocab:["Media"],                                   grammar:"adverb-time"        },
-    { id:16, title:"Retail & E-commerce",    vocab:["Sales","E-commerce"],                      grammar:"vocabulary-context" },
-    { id:17, title:"Research & Development", vocab:["Project Management","General"],             grammar:"vocabulary"         },
-    { id:18, title:"Professional Training",  vocab:["Education"],                               grammar:"vocabulary-context" },
-    { id:19, title:"Law & Contracts",        vocab:["Legal"],                                   grammar:"inversion"          },
-    { id:20, title:"Environment & Energy",   vocab:["Environment","Sustainability"],             grammar:"quantifiers"        },
-    { id:21, title:"Business Communications",vocab:["Collocations","Phrases"],                  grammar:"business-english"   },
-    { id:22, title:"Corporate Policy",       vocab:["Leadership","Business"],                   grammar:"subjunctive"        },
-    { id:23, title:"Advanced Structures",    vocab:["General","Food & Beverage"],               grammar:"prep-structures"    },
+    { id:1,  title:"Business Foundations",    vocab:["Office","Business"]                       },
+    { id:2,  title:"Office Life",             vocab:["HR","Office"]                             },
+    { id:3,  title:"Personnel & HR",          vocab:["HR","Leadership"]                         },
+    { id:4,  title:"Marketing & Sales",       vocab:["Marketing","Sales"]                       },
+    { id:5,  title:"Finance & Budget",        vocab:["Finance","Accounting"]                    },
+    { id:6,  title:"Tech & Innovation",       vocab:["Tech","Digital"]                          },
+    { id:7,  title:"Manufacturing & QC",      vocab:["Manufacturing","Supply Chain"]            },
+    { id:8,  title:"Travel & Tourism",        vocab:["Travel"]                                  },
+    { id:9,  title:"Corporate Events",        vocab:["Events"]                                  },
+    { id:10, title:"Customer Service",        vocab:["Customer Service"]                        },
+    { id:11, title:"Logistics & Shipping",    vocab:["Supply Chain","Insurance"]                },
+    { id:12, title:"Health & Safety",         vocab:["Healthcare","Safety"]                     },
+    { id:13, title:"Banking & Investment",    vocab:["Finance","Accounting"]                    },
+    { id:14, title:"Real Estate",             vocab:["Property"]                                },
+    { id:15, title:"Media & Communications", vocab:["Media"]                                   },
+    { id:16, title:"Retail & E-commerce",    vocab:["Sales","E-commerce"]                      },
+    { id:17, title:"Research & Development", vocab:["Project Management","General"]             },
+    { id:18, title:"Professional Training",  vocab:["Education"]                               },
+    { id:19, title:"Law & Contracts",        vocab:["Legal"]                                   },
+    { id:20, title:"Environment & Energy",   vocab:["Environment","Sustainability"]             },
+    { id:21, title:"Business Communications",vocab:["Collocations","Phrases"]                  },
+    { id:22, title:"Corporate Policy",       vocab:["Leadership","Business"]                   },
+    { id:23, title:"Advanced Structures",    vocab:["General","Food & Beverage"]               },
   ];
 
   // ─── TOEIC Reading Score Conversion Table (% đúng → dải điểm) ───
@@ -233,6 +233,9 @@ const App = (() => {
   }
 
   // ─── Vocabulary Page ───
+  // ─── Vocab status filter state ───
+  let vocabStatusFilter = 'all';
+
   function setupVocabPage() {
     const categories = ['All', ...new Set(DB.vocab.map(v => v.category))].sort((a,b) => a === 'All' ? -1 : a.localeCompare(b));
     const filterBar  = document.getElementById('vocab-filters');
@@ -248,8 +251,34 @@ const App = (() => {
       });
     });
     document.getElementById('vocab-search').addEventListener('input', renderVocabGrid);
+
+    // Status filter buttons
+    document.querySelectorAll('.dict-status-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.dict-status-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        vocabStatusFilter = btn.dataset.status;
+        renderVocabGrid();
+      });
+    });
+
     // flashcard button is handled by SRS version in init()
     renderVocabGrid();
+    updateDictHeroStats();
+  }
+
+  function updateDictHeroStats() {
+    const prog = getProgress();
+    const knownIds  = new Set(prog.fcKnown_ids  || []);
+    const reviewIds = new Set(prog.fcReview_ids || []);
+    const seenIds   = new Set(prog.vocabSeen_ids || []);
+    const total     = DB.vocab.length;
+    const known  = DB.vocab.filter(v => knownIds.has(v.id)).length;
+    const review = DB.vocab.filter(v => reviewIds.has(v.id) && !knownIds.has(v.id)).length;
+    const unseen = total - seenIds.size;
+    document.getElementById('dict-stat-known-num').textContent  = known;
+    document.getElementById('dict-stat-review-num').textContent = review;
+    document.getElementById('dict-stat-new-num').textContent    = Math.max(0, unseen);
   }
 
   // ─── Flashcard State ───
@@ -315,8 +344,18 @@ const App = (() => {
     fcFlipped = true;
     const inner   = document.getElementById('fc-inner');
     const actions = document.getElementById('fc-actions');
-    if (inner)   inner.classList.add('flipped');
-    if (actions) actions.style.display = 'block';
+    if (inner) inner.classList.add('flipped');
+    if (actions) {
+      // Inject the correct rating buttons at flip time (works for both SRS and legacy mode)
+      actions.innerHTML = `
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+          <button class="btn" style="background:rgba(244,63,94,.18);border:1px solid var(--danger);color:var(--danger);font-size:.8rem" onclick="App.rateCardSRS('wrong')">😓 Chưa nhớ</button>
+          <button class="btn" style="background:rgba(79,142,247,.15);border:1px solid var(--accent);color:var(--accent);font-size:.8rem" onclick="App.rateCardSRS('right')">👍 Nhớ rồi</button>
+          <button class="btn" style="background:rgba(16,185,129,.12);border:1px solid var(--success);color:var(--success);font-size:.8rem" onclick="App.rateCardSRS('easy')">⚡ Dễ quá!</button>
+        </div>
+        <button class="btn btn-outline btn-sm" onclick="App.skipCard()" style="width:100%;margin-top:10px;font-size:.8rem;color:var(--text-muted)">Bỏ qua →</button>`;
+      actions.style.display = 'block';
+    }
     // Mark vocab as seen
     const v = fcDeck[fcIndex];
     if (v) {
@@ -324,7 +363,8 @@ const App = (() => {
       const seen = new Set(prog.vocabSeen_ids || []);
       seen.add(v.id);
       saveProgress({ vocabSeen: seen.size, vocabSeen_ids: [...seen] });
-      document.getElementById('stat-vocab').textContent = seen.size;
+      const statEl = document.getElementById('stat-vocab');
+      if (statEl) statEl.textContent = seen.size;
     }
   }
 
@@ -347,14 +387,14 @@ const App = (() => {
     }
     updateFcStats();
     fcIndex++;
-    setTimeout(renderFcCard, 180);
+    setTimeout(renderFcCardSRS, 180);
   }
 
   function skipCard() {
     fcSkip++;
     updateFcStats();
     fcIndex++;
-    setTimeout(renderFcCard, 100);
+    setTimeout(renderFcCardSRS, 100);
   }
 
   function updateFcStats() {
@@ -407,30 +447,69 @@ const App = (() => {
       </div>`;
     // Clear saved review list for fresh start
     saveProgress({ fcReview_ids: [] });
-    renderFcCard();
+    renderFcCardSRS();
     showToast(`Ôn lại ${fcDeck.length} từ cần ôn`, '🔄');
   }
 
   function renderVocabGrid() {
     const search   = (document.getElementById('vocab-search')?.value || '').toLowerCase();
-    const filtered = DB.vocab.filter(v => {
+    const prog     = getProgress();
+    const knownIds  = new Set(prog.fcKnown_ids  || []);
+    const reviewIds = new Set(prog.fcReview_ids || []);
+    const seenIds   = new Set(prog.vocabSeen_ids || []);
+
+    let filtered = DB.vocab.filter(v => {
       const matchCat    = vocabFilter === 'All' || v.category === vocabFilter;
       const matchSearch = !search || v.word.toLowerCase().includes(search) || v.meaning.toLowerCase().includes(search);
-      return matchCat && matchSearch;
+      if (!matchCat || !matchSearch) return false;
+      if (vocabStatusFilter === 'known')  return knownIds.has(v.id);
+      if (vocabStatusFilter === 'review') return reviewIds.has(v.id) && !knownIds.has(v.id);
+      if (vocabStatusFilter === 'new')    return !seenIds.has(v.id);
+      return true;
     });
+
     const grid = document.getElementById('vocab-grid');
-    grid.innerHTML = filtered.length === 0
-      ? `<div style="color:var(--text-muted);padding:24px;text-align:center;">Không tìm thấy từ nào.</div>`
-      : filtered.map(v => `
-        <div class="vocab-card" onclick="App.showVocabDetail(${v.id})">
-          <div class="vocab-category"><span class="badge badge-blue">${v.category}</span></div>
-          <div class="vocab-word">${v.word}</div>
-          <div class="vocab-phonetic">${v.phonetic}</div>
-          <div class="vocab-type">[${v.type}]</div>
-          <div class="vocab-meaning">${v.meaning}</div>
-          <div class="vocab-example">${v.example}</div>
-        </div>`).join('');
+    if (filtered.length === 0) {
+      grid.innerHTML = `<div class="dict-empty">Không tìm thấy từ nào phù hợp.</div>`;
+      document.getElementById('vocab-count').textContent = '0 từ';
+      return;
+    }
     document.getElementById('vocab-count').textContent = `${filtered.length} từ`;
+
+    // Highlight search term in word/meaning
+    function hl(str) {
+      if (!search) return str;
+      return str.replace(new RegExp(`(${search.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')})`, 'gi'),
+        '<mark class="dict-hl">$1</mark>');
+    }
+
+    grid.innerHTML = filtered.map(v => {
+      const isKnown  = knownIds.has(v.id);
+      const isReview = reviewIds.has(v.id) && !isKnown;
+      const isNew    = !seenIds.has(v.id);
+      let statusBadge = '';
+      if (isKnown)       statusBadge = '<span class="dict-status-badge dict-badge-known">✅ Đã thuộc</span>';
+      else if (isReview) statusBadge = '<span class="dict-status-badge dict-badge-review">🔄 Cần ôn</span>';
+      else if (isNew)    statusBadge = '<span class="dict-status-badge dict-badge-new">🆕 Mới</span>';
+
+      return `
+        <div class="dict-entry ${isKnown?'dict-entry-known':isReview?'dict-entry-review':''}" onclick="App.showVocabDetail(${v.id})">
+          <div class="dict-entry-left">
+            <div class="dict-entry-word">${hl(v.word)}</div>
+            <div class="dict-entry-meta">
+              <span class="dict-phonetic">${v.phonetic}</span>
+              <span class="dict-type-tag">${v.type}</span>
+              ${statusBadge}
+            </div>
+          </div>
+          <div class="dict-entry-right">
+            <div class="dict-entry-meaning">${hl(v.meaning)}</div>
+            <div class="dict-entry-example">${v.example}</div>
+          </div>
+          <div class="dict-entry-cat"><span class="badge badge-blue">${v.category}</span></div>
+          <button class="dict-speak-btn" title="Phát âm" onclick="event.stopPropagation();window.speechSynthesis&&window.speechSynthesis.speak(Object.assign(new SpeechSynthesisUtterance('${v.word.replace(/'/g,"\\'")}'),{lang:'en-US',rate:0.9}))">🔊</button>
+        </div>`;
+    }).join('');
   }
 
   function showVocabDetail(id) {
@@ -915,9 +994,408 @@ const App = (() => {
 
   function renderGrammarContent() {
     const topic = DB.grammar.find(t => t.id === grammarTopic);
-    const area = document.getElementById('grammar-content-area');
+    const area  = document.getElementById('grammar-content-area');
     if (!topic) { area.innerHTML = ''; return; }
+    if (topic.id === 'grammar-reference') { _renderQuickReference(area); return; }
+    _renderGrammarContentMain(topic, area);
+  }
 
+  // ─── Quick Reference – Interactive lookup ────────────────────
+  function _renderQuickReference(area) {
+    // ── Data: tất cả rule cards ───────────────────────────────
+    const QR_CARDS = [
+      // ── TENSES ─────────────────────────────────────────────
+      { group:'⏱️ Thì động từ', id:'verb-tense', title:'Present Simple', keywords:'always usually every schedule routine habit',
+        formula:'S + V(s/es)', vi:'Thói quen, sự thật, lịch trình cố định',
+        keys:'always, usually, often, every, generally, on Monday',
+        example:'The store opens at 9 a.m. every day.' },
+      { group:'⏱️ Thì động từ', id:'verb-tense', title:'Present Continuous', keywords:'right now currently at the moment',
+        formula:'S + am/is/are + V-ing', vi:'Đang xảy ra; kế hoạch sắp tới',
+        keys:'right now, at the moment, currently, this week',
+        example:'We are launching the product next month.' },
+      { group:'⏱️ Thì động từ', id:'verb-tense', title:'Present Perfect', keywords:'since for already yet recently just to date',
+        formula:'S + have/has + V3', vi:'Hành động có liên quan đến hiện tại; kinh nghiệm',
+        keys:'since, for, already, yet, recently, just, so far, to date',
+        example:'The team has completed three projects this year.' },
+      { group:'⏱️ Thì động từ', id:'verb-tense', title:'Past Simple', keywords:'yesterday last ago in 2020',
+        formula:'S + V2/ed', vi:'Hành động đã hoàn tất ở thời điểm xác định',
+        keys:'yesterday, last week, ago, in [year], at that time',
+        example:'The company launched the product in March 2023.' },
+      { group:'⏱️ Thì động þừ', id:'verb-tense', title:'Past Perfect', keywords:'by the time before after had',
+        formula:'S + had + V3', vi:'Xảy ra TRƯỚC hành động quá khứ khác',
+        keys:'by the time [past], before, after, already (in past)',
+        example:'She had reviewed all documents before the meeting started.' },
+      { group:'⏱️ Thì động từ', id:'verb-tense', title:'Future Perfect ⭐', keywords:'by the time will have future',
+        formula:'S + will have + V3', vi:'Hoàn tất TRƯỚC mốc tương lai',
+        keys:'by [future time], by the time + present simple',
+        example:'By Friday, the team will have completed the report.',
+        trap:'By the time + present → Future Perfect (không dùng will trong mệnh đề thời gian)' },
+      // ── PASSIVE ─────────────────────────────────────────────
+      { group:'🔄 Câu bị động', id:'passive', title:'Bị động theo thì', keywords:'passive be v3 is are was were',
+        formula:'S + be(chia thì) + V3 [+ by agent]', vi:'Chủ thể nhận tác động',
+        keys:'is/are reviewed · was/were submitted · will be processed · has/have been approved · modal + be + V3',
+        example:'The contract has been signed by both parties.' },
+      { group:'🔄 Câu bị động', id:'passive', title:'Modal + Passive ⭐', keywords:'must should can modal be v3',
+        formula:'modal + be + V3', vi:'Yêu cầu/khả năng bị động',
+        keys:'must be submitted, should be reviewed, can be accessed',
+        example:'All applications must be submitted by Friday.' },
+      { group:'🔄 Câu bị động', id:'passive', title:'Participial Adjectives ⚠️', keywords:'interesting interested surprising surprised boring bored',
+        formula:'V-ing = gây ra · V3/ed = nhận cảm xúc', vi:'Phân biệt chủ động/bị động',
+        keys:'-ing: the news is surprising · -ed: she is surprised',
+        example:'The results were surprising. The team felt surprised.',
+        trap:'The presentation was interesting / The audience was interested' },
+      // ── CONDITIONALS ───────────────────────────────────────
+      { group:'🔀 Câu điều kiện', id:'conditionals', title:'Type 0 – Sự thật', keywords:'if present present zero',
+        formula:'If + Present, Present', vi:'Quy luật, sự thật hiển nhiên',
+        keys:'If/When + present simple, present simple',
+        example:'If water reaches 100°C, it boils.' },
+      { group:'🔀 Câu điều kiện', id:'conditionals', title:'Type 1 – Có thể xảy ra', keywords:'if present will can may',
+        formula:'If + Present, will/can/may + V', vi:'Điều kiện có thể xảy ra',
+        keys:'If + present simple, will/can/may + V',
+        example:'If you register before Oct 25, you will get the early bird rate.' },
+      { group:'🔀 Câu điều kiện', id:'conditionals', title:'Type 2 – Trái hiện tại', keywords:'if past would were type 2',
+        formula:'If + Past Simple, would/could + V', vi:'Giả định trái thực tế hiện tại',
+        keys:'If + past (were for all subjects), would/could + V',
+        example:'If she were available, she would lead the training.',
+        trap:'Luôn dùng "were" (không "was") trong Type 2' },
+      { group:'🔀 Câu điều kiện', id:'conditionals', title:'Type 3 – Trái quá khứ', keywords:'if had v3 would have past perfect',
+        formula:'If + Past Perfect, would have + V3', vi:'Giả định trái thực tế quá khứ',
+        keys:'If + had + V3, would/could/might have + V3',
+        example:'If the budget had been approved, the launch could have happened earlier.' },
+      { group:'🔀 Câu điều kiện', id:'conditionals', title:'Đảo ngữ điều kiện ⭐⭐', keywords:'should were had inversion formal',
+        formula:'Should you / Were S to / Had S + V3', vi:'Trang trọng hơn "if"',
+        keys:'Should you + V (Type1) · Were S to V (Type2) · Had S V3 (Type3)',
+        example:'Should you have any questions, please contact us.',
+        trap:'"Should you + V" rất phổ biến trong email TOEIC' },
+      // ── WORD FORM ───────────────────────────────────────────
+      { group:'🔡 Từ loại', id:'word-form', title:'Vị trí nhận biết từ loại', keywords:'noun verb adjective adverb position',
+        formula:'the/a/an → N · after be → adj · modify V → adv', vi:'Nhận dạng từ loại qua vị trí',
+        keys:'after the/a/an → noun · before noun → adj · after verb/adj → adv',
+        example:'The implementation (N) of the policy was effective (adj). It was effectively (adv) implemented.' },
+      { group:'🔡 Từ loại', id:'word-form', title:'Hậu tố nhận dạng ⭐', keywords:'suffix tion ment ness ive ly ous',
+        formula:'-tion/-ment/-ness/-ity = N · -ive/-al/-ous/-able = adj · -ly = adv', vi:'Hậu tố = từ loại',
+        keys:'-tion: implementation · -ment: management · -ness: effectiveness · -ly: efficiently',
+        example:'Efficiency (N) → efficient (adj) → efficiently (adv).' },
+      { group:'🔡 Từ loại', id:'word-form', title:'Cặp từ dễ nhầm ⭐⭐', keywords:'economic economical historic historical successful successive',
+        formula:'economic ≠ economical · historic ≠ historical', vi:'Sắc thái nghĩa khác nhau',
+        keys:'economic (kinh tế) vs economical (tiết kiệm) · successful (thành công) vs successive (liên tiếp)',
+        example:'An economical solution saves costs. Three successive quarters of growth.',
+        trap:'considerable (đáng kể) vs considerate (chu đáo) · comprehensive (toàn diện) vs comprehensible (hiểu được)' },
+      // ── PREPOSITIONS ────────────────────────────────────────
+      { group:'📍 Giới từ', id:'prepositions', title:'Giới từ thời gian ⭐', keywords:'at on in by until for since during',
+        formula:'at = điểm · on = ngày · in = tháng/năm · by = deadline · until = liên tục',
+        vi:'Phân biệt giới từ thời gian',
+        keys:'at 9 a.m. · on Monday · in March · by Friday (deadline) · until 5 p.m. (kéo dài)',
+        example:'Submit the report by 5 p.m. The office is open until 9 p.m.',
+        trap:'"by" = không muộn hơn (deadline) ≠ "until" = liên tục đến tận' },
+      { group:'📍 Giới từ', id:'prepositions', title:'Adj + Giới từ cố định ⭐⭐', keywords:'responsible for interested in satisfied with committed to aware of',
+        formula:'adj + prep = cụm cố định', vi:'Học thuộc các cụm adj+prep',
+        keys:'responsible/eligible FOR · interested/specialized IN · satisfied/familiar WITH · committed/dedicated TO · aware/capable OF',
+        example:'She is responsible for the entire project. We are committed to quality.' },
+      { group:'📍 Giới từ', id:'prepositions', title:'Cụm giới từ trang trọng ⭐', keywords:'in accordance with on behalf of in lieu of prior to as of',
+        formula:'Cụm giới từ = bất biến', vi:'Cụm giới từ hay gặp trong TOEIC',
+        keys:'in accordance with · on behalf of · in addition to · prior to · as of [date] · in response to · in terms of',
+        example:'On behalf of the team, I thank you. As of January 1st, the policy takes effect.' },
+      // ── CONJUNCTIONS ────────────────────────────────────────
+      { group:'🔗 Liên từ', id:'conjunction', title:'Nhượng bộ ⚠️', keywords:'although despite despite in spite of even though',
+        formula:'although/even though + CLAUSE · despite/in spite of + NOUN', vi:'Tương phản – phân biệt cấu trúc',
+        keys:'Although/Even though/While + S+V · Despite/In spite of/Notwithstanding + N/V-ing',
+        example:'Although the budget was tight, the team succeeded. Despite the high cost, it was worth it.',
+        trap:'"Despite + clause" = SAI. "Despite + noun/V-ing" = ĐÚNG' },
+      { group:'🔗 Liên từ', id:'conjunction', title:'Nguyên nhân & Kết quả', keywords:'because due to therefore thus consequently as a result',
+        formula:'because + CLAUSE · due to/owing to + NOUN', vi:'Nhân quả – phân biệt cấu trúc',
+        keys:'because/since/as + clause · due to/owing to/because of + noun · therefore/thus/consequently + clause',
+        example:'Because costs rose, prices increased. Due to cost increases, prices rose.' },
+      { group:'🔗 Liên từ', id:'conjunction', title:'Bổ sung & Tương phản', keywords:'furthermore moreover however nevertheless nonetheless',
+        formula:'Trạng từ liên kết: ; adverb, CLAUSE', vi:'Dùng sau dấu ; hoặc đầu câu mới',
+        keys:'furthermore/moreover/in addition (bổ sung) · however/nevertheless/nonetheless (tương phản)',
+        example:'The plan is feasible; furthermore, it is cost-effective. The proposal was strong; however, revisions were needed.' },
+      // ── GERUND / INFINITIVE ─────────────────────────────────
+      { group:'✏️ Gerund/Infinitive', id:'gerund-infinitive', title:'Động từ + Gerund ⭐', keywords:'enjoy avoid suggest recommend consider postpone delay finish',
+        formula:'V + V-ing', vi:'Nhóm động từ đi với gerund',
+        keys:'enjoy, avoid, consider, suggest, recommend, postpone, delay, finish, practice, keep, involve, risk, mind',
+        example:'The committee recommended reviewing the guidelines.' },
+      { group:'✏️ Gerund/Infinitive', id:'gerund-infinitive', title:'Động từ + Infinitive ⭐', keywords:'want plan decide agree refuse manage fail expect need',
+        formula:'V + to + V', vi:'Nhóm động từ đi với to-infinitive',
+        keys:'want, plan, decide, agree, refuse, manage, fail, expect, arrange, need, hope, tend, promise',
+        example:'We plan to open three branches next year.' },
+      { group:'✏️ Gerund/Infinitive', id:'gerund-infinitive', title:'Giới từ + Gerund ⭐⭐', keywords:'look forward to in addition to prior to responsible for',
+        formula:'Preposition + V-ing (KHÔNG to-V)', vi:'Sau giới từ LUÔN dùng V-ing',
+        keys:'look forward to V-ing · prior to V-ing · in addition to V-ing · responsible for V-ing',
+        example:'We look forward to hearing from you.',
+        trap:'"look forward to + V-ing" — "to" là giới từ, KHÔNG phải to-infinitive!' },
+      { group:'✏️ Gerund/Infinitive', id:'gerund-infinitive', title:'Nghĩa KHÁC nhau ⭐⭐', keywords:'remember forget stop try',
+        formula:'V + to-V = tương lai · V + V-ing = quá khứ/thực tế', vi:'Cùng động từ, nghĩa khác',
+        keys:'remember to V (nhớ sẽ làm) vs remember V-ing (nhớ đã làm) · stop to V (dừng ĐỂ) vs stop V-ing (ngừng) · try to V (cố gắng) vs try V-ing (thử nghiệm)',
+        example:'Remember to submit the report. (= chưa nộp, phải nhớ nộp) I remember submitting it. (= đã nộp rồi)',
+        trap:'try to V ≠ try V-ing' },
+      // ── COMPARISON ──────────────────────────────────────────
+      { group:'📊 So sánh', id:'comparison', title:'Comparative & Superlative', keywords:'more than er est most',
+        formula:'1 âm tiết: adj-er than · 2+: more adj than · nhất: the most/adj-est', vi:'Quy tắc so sánh',
+        keys:'fast→faster→fastest · expensive→more expensive→most expensive · good→better→best · bad→worse→worst',
+        example:'This is more comprehensive than the previous version. It is by far the best deal.' },
+      { group:'📊 So sánh', id:'comparison', title:'Nhấn mạnh so sánh hơn ⭐', keywords:'much far significantly considerably',
+        formula:'much/far/significantly + comparative', vi:'Tăng cường mức độ so sánh',
+        keys:'much higher · far more expensive · significantly better · considerably faster',
+        example:'Online sales are significantly higher than last year.',
+        trap:'KHÔNG dùng "very" trước so sánh hơn. "Very higher" = SAI' },
+      { group:'📊 So sánh', id:'comparison', title:'The more...the better ⭐', keywords:'the more the better the higher',
+        formula:'The + comparative, the + comparative', vi:'Càng...càng...',
+        keys:'The more you practice, the better you get. The sooner we act, the less it will cost.',
+        example:'The more data we collect, the better our predictions become.' },
+      // ── RELATIVE CLAUSE ─────────────────────────────────────
+      { group:'🔍 Mệnh đề quan hệ', id:'relative-clause', title:'Đại từ quan hệ', keywords:'who whom whose which that where when why',
+        formula:'who = người chủ · whom = người tân · whose = sở hữu · which = vật · where = nơi · when = thời · why = lý do', vi:'Chọn đại từ quan hệ',
+        keys:'who (person, subject) · whom (person, object) · whose (possession) · which (thing) · where (place) · when (time) · why (reason)',
+        example:'The manager whose decision surprised everyone approved the budget.' },
+      { group:'🔍 Mệnh đề quan hệ', id:'relative-clause', title:'Rút gọn mệnh đề QH ⭐', keywords:'reduce relative clause v-ing v3 past participle',
+        formula:'who is V-ing → V-ing · which is V3 → V3', vi:'Rút gọn = bỏ đại từ + be',
+        keys:'who is reviewing → reviewing · which was submitted → submitted · who are selected → selected',
+        example:'The manager reviewing the proposal is our CFO. The report submitted yesterday was approved.' },
+      // ── PRONOUN ─────────────────────────────────────────────
+      { group:'🅰️ Đại từ', id:'pronoun', title:'Bảng đại từ đầy đủ', keywords:'he him his himself she her hers herself they them their',
+        formula:'subject / object / possessive adj / possessive pron / reflexive', vi:'5 dạng đại từ',
+        keys:'I/me/my/mine/myself · he/him/his/his/himself · she/her/her/hers/herself · they/them/their/theirs/themselves',
+        example:'The director reviewed the report himself. (reflexive = nhấn mạnh, chính tự làm)' },
+      { group:'🅰️ Đại từ', id:'pronoun', title:'Mạo từ ⭐⭐', keywords:'a an the zero article',
+        formula:'a/an = lần đầu đề cập · the = đã xác định · ∅ = chung chung', vi:'Quy tắc mạo từ',
+        keys:'a/an → the (lần 2) · the + only/same/superlative · the + địa danh số nhiều · ∅ + uncountable chung chung',
+        example:'We received a complaint. The complaint was resolved immediately.',
+        trap:'"The" trước tính từ đặc định: "the new policy" (đã biết policy nào) vs "a new policy" (chưa xác định)' },
+      // ── MODAL ───────────────────────────────────────────────
+      { group:'💡 Modals', id:'modal', title:'Phân biệt nghĩa modal ⭐', keywords:'must should may might can could would',
+        formula:'must = bắt buộc · should = khuyên · may/might = khả năng · can = khả năng/cho phép', vi:'Chọn modal theo nghĩa',
+        keys:'must (obligation) · should (advice) · may/might (possibility) · can/could (ability/permission) · would (hypothetical/polite)',
+        example:'All staff must wear ID badges. You should double-check before submitting.' },
+      { group:'💡 Modals', id:'modal', title:'Perfect Modals ⭐⭐', keywords:'must have should have might have could have would have',
+        formula:'modal + have + V3', vi:'Suy luận/tiếc nuối về quá khứ',
+        keys:'must have V3 (chắc chắn đã) · should have V3 (đáng lẽ phải) · could have V3 (có thể đã) · might have V3 (có thể đã - không chắc)',
+        example:'She should have confirmed the reservation. The package must have been delivered while we were out.',
+        trap:'"Should have + V3" = đáng lẽ phải làm (không làm = tiếc nuối/chỉ trích)' },
+      // ── SUBJECT-VERB ────────────────────────────────────────
+      { group:'⚖️ Hòa hợp chủ-vị', id:'subject-verb', title:'Các trường hợp đặc biệt ⭐⭐', keywords:'subject verb agreement each every neither either number',
+        formula:'Động từ theo CHÍNH (bỏ qua giới từ đi kèm)', vi:'Chủ ngữ phức tạp',
+        keys:'The quality of the products HAS · A number of employees HAVE · The number of employees IS · Each/Every + singular + singular verb · Neither A nor B: verb theo B',
+        example:'The number of applicants has increased. A number of employees have signed up.',
+        trap:'"A number of" (số nhiều) ≠ "The number of" (số ít)' },
+      { group:'⚖️ Hòa hợp chủ-vị', id:'subject-verb', title:'Danh từ không đếm được ⭐', keywords:'information advice equipment furniture news',
+        formula:'uncountable = số ít (luôn)', vi:'Danh từ không đếm được → động từ số ít',
+        keys:'information, advice, equipment, furniture, feedback, software, news, progress, research, evidence',
+        example:'The information is confidential. The equipment needs to be calibrated.' },
+      // ── NOUN CLAUSES ────────────────────────────────────────
+      { group:'📦 Mệnh đề danh từ', id:'noun-clauses', title:'Câu hỏi gián tiếp ⭐⭐', keywords:'indirect question where how when why whether if',
+        formula:'Wh + S + V (không đảo ngữ)', vi:'Câu hỏi trực tiếp → gián tiếp',
+        keys:'where is → where S is · how does X work → how X works · whether/if (Yes/No question)',
+        example:'Can you tell me where the office is? Please explain how the system works.',
+        trap:'"Please explain how does it work" = SAI. "How it works" = ĐÚNG' },
+      { group:'📦 Mệnh đề danh từ', id:'noun-clauses', title:'It is + adj + that ⭐', keywords:'it is essential important necessary that subjunctive',
+        formula:'It is essential/important/necessary + that + S + V nguyên thể', vi:'Chủ ngữ giả + subjunctive',
+        keys:'essential, necessary, important, vital, critical, recommended + that + V nguyên thể',
+        example:'It is essential that every employee follow the evacuation procedure.',
+        trap:'"It is essential that he FOLLOWS" = SAI. "follows" → "follow" (subjunctive)' },
+      // ── SUBJUNCTIVE ─────────────────────────────────────────
+      { group:'🎯 Subjunctive', id:'subjunctive', title:'Sau suggest/recommend/insist ⭐⭐', keywords:'suggest recommend insist require demand propose subjunctive',
+        formula:'V + that + S + V nguyên thể (không chia -s)', vi:'Subjunctive sau nhóm động từ yêu cầu/đề xuất',
+        keys:'suggest, recommend, insist, require, demand, propose, mandate, stipulate + that + V base form',
+        example:'The board recommended that we launch in Southeast Asia. The auditor insisted that the report be revised.',
+        trap:'"Insisted that he submits" = SAI. "submit" (không -s, không -ed)' },
+      { group:'🎯 Subjunctive', id:'subjunctive', title:'Bị động Subjunctive ⭐', keywords:'be v3 passive subjunctive proposed suggested',
+        formula:'that + S + be + V3', vi:'Bị động subjunctive = be + V3',
+        keys:'It is proposed that the meeting BE postponed. It is recommended that the form BE completed.',
+        example:'The committee proposed that the deadline be extended.',
+        trap:'"Be postponed" (không "is/was postponed") trong subjunctive' },
+      // ── INVERSION ───────────────────────────────────────────
+      { group:'🔁 Đảo ngữ', id:'inversion', title:'Phó từ phủ định ⭐⭐', keywords:'never rarely seldom hardly scarcely not only',
+        formula:'Adv phủ định + aux + S + V', vi:'Đảo ngữ trang trọng, nhấn mạnh',
+        keys:'Never/Rarely/Seldom/Hardly/Scarcely/Barely + have/has/did/does + S + V · Not only did S V, but also...',
+        example:'Never before has the company received such reviews. Rarely do we see such dedication.' },
+      { group:'🔁 Đảo ngữ', id:'inversion', title:'Only + adverbial ⭐', keywords:'only after only when only by only if only then',
+        formula:'Only + adverbial, aux + S + V', vi:'Đảo ngữ sau "only"',
+        keys:'Only after/when/if/then/by + [phrase] + aux + S + V',
+        example:'Only after reviewing all data did the team reach a conclusion. Only if you register by Friday can you get the discount.' },
+      // ── QUANTIFIERS ─────────────────────────────────────────
+      { group:'🔢 Lượng từ', id:'quantifiers', title:'Bảng lượng từ ⭐⭐', keywords:'many much few little some any a lot of',
+        formula:'many/few/fewer + đếm được · much/little/less + không đếm được · some/any/a lot of = cả hai', vi:'Lượng từ theo loại danh từ',
+        keys:'many/few/fewer (countable plural) · much/little/less (uncountable) · some/any/a lot of (both) · each/every (countable singular)',
+        example:'There is not much time left. A few candidates were shortlisted.',
+        trap:'"A few" = tích cực (vài) ≠ "few" = tiêu cực (hầu như không)' },
+      { group:'🔢 Lượng từ', id:'quantifiers', title:'Less vs Fewer ⭐', keywords:'less fewer countable uncountable',
+        formula:'fewer + đếm được · less + không đếm được', vi:'Phân biệt less/fewer',
+        keys:'fewer employees (countable) · less waste (uncountable) · no fewer than (≥ min) · no more than (≤ max)',
+        example:'The new process generates less waste and requires fewer workers.' },
+      // ── PARTICIPLES ─────────────────────────────────────────
+      { group:'🌿 Phân từ', id:'participles', title:'Rút gọn mệnh đề ⭐', keywords:'having v-ing v3 participle reduce',
+        formula:'V-ing = chủ động/đồng thời · V3 = bị động · Having V3 = hoàn thành trước', vi:'Rút gọn mệnh đề phụ',
+        keys:'While reviewing → Reviewing · After having completed → Having completed · Because it was written → Written',
+        example:'Reviewing the contract, she noticed a key clause. Having completed the training, the team began the project.' },
+      { group:'🌿 Phân từ', id:'participles', title:'Dangling Participle ⚠️', keywords:'dangling participle error wrong subject',
+        formula:'Phân từ phải có chủ ngữ = chủ ngữ mệnh đề chính', vi:'Lỗi chủ ngữ không khớp',
+        keys:'SAI: Having reviewed the report, the deadline was extended. ĐÚNG: Having reviewed the report, the manager extended the deadline.',
+        example:'Based on the results, the manager revised the strategy. ✓',
+        trap:'"Based on" và "Given" là cụm phân từ cố định, không bị coi là dangling' },
+      // ── ADVERB TIME ─────────────────────────────────────────
+      { group:'🕐 Mệnh đề thời gian', id:'adverb-time', title:'Không dùng will ⭐⭐', keywords:'when after before once until as soon as no will',
+        formula:'Time clause: hiện tại → thay cho tương lai', vi:'Quy tắc bắt buộc',
+        keys:'when/after/before/once/until/as soon as + PRESENT SIMPLE (không will)',
+        example:'Once the report is ready, please send it. After the meeting ends, we will discuss.',
+        trap:'"Once the report will be ready" = SAI. "Once the report is ready" = ĐÚNG' },
+      { group:'🕐 Mệnh đề thời gian', id:'adverb-time', title:'By the time ⭐⭐', keywords:'by the time past perfect future perfect',
+        formula:'By the time + present → Future Perfect · By the time + past → Past Perfect', vi:'Quy tắc "by the time"',
+        keys:'By the time he arrives (present), we will have finished (future perfect). By the time he arrived (past), we had finished (past perfect).',
+        example:'By the time the director arrives, the team will have completed the presentation.',
+        trap:'"By the time" = bẫy cực phổ biến trong TOEIC Part 5' },
+      // ── TOP 10 ETS TRAPS ────────────────────────────────────
+      { group:'⭐ Top ETS Traps', id:'part5-strategy', title:'Top 10 Bẫy ETS 2025', keywords:'trap ets toeic common mistakes',
+        formula:'Ghi nhớ để không bị lừa', vi:'Bẫy thường gặp nhất ETS 2025',
+        keys:'1. by≠until · 2. despite+N · 3. look forward to V-ing · 4. by the time+present→FP · 5. each/every+singular · 6. the number of+singular · 7. a number of+plural · 8. subjunctive (no -s) · 9. should you = inversion · 10. economic≠economical',
+        example:'Should you have questions, please contact us. (Formal conditional inversion)',
+        trap:'Học thuộc 10 bẫy này = +5 điểm Part 5' },
+      // ── BUSINESS COLLOCATIONS ───────────────────────────────
+      { group:'💼 Business Collocations', id:'business-english', title:'Verbs for Meetings & Reports', keywords:'schedule arrange postpone cancel submit review present',
+        formula:'V + N collocations', vi:'Cụm từ thương mại chuẩn ETS',
+        keys:'schedule/arrange/postpone/cancel/chair a meeting · submit/review/present/distribute/compile a report · sign/draft/terminate/renew a contract',
+        example:'The committee will review and present the report at the next board meeting.' },
+      { group:'💼 Business Collocations', id:'business-english', title:'Verbs for Products & HR', keywords:'launch release hire recruit promote dismiss',
+        formula:'V + N collocations (HR & Product)', vi:'Cụm từ HR và sản phẩm',
+        keys:'launch/release/unveil a product · hire/recruit/onboard/promote/dismiss employees · allocate/exceed/approve a budget',
+        example:'The company unveiled its new product line and hired 50 additional staff members.' },
+    ];
+
+    // ── Groups (order) ────────────────────────────────────────
+    const GROUP_ORDER = [
+      '⭐ Top ETS Traps',
+      '⏱️ Thì động từ',
+      '🔄 Câu bị động',
+      '🔀 Câu điều kiện',
+      '🔡 Từ loại',
+      '✏️ Gerund/Infinitive',
+      '📍 Giới từ',
+      '🔗 Liên từ',
+      '🔍 Mệnh đề quan hệ',
+      '🅰️ Đại từ',
+      '💡 Modals',
+      '⚖️ Hòa hợp chủ-vị',
+      '📦 Mệnh đề danh từ',
+      '🎯 Subjunctive',
+      '🔁 Đảo ngữ',
+      '🔢 Lượng từ',
+      '🌿 Phân từ',
+      '🕐 Mệnh đề thời gian',
+      '💼 Business Collocations',
+    ];
+
+    // ── Render function ────────────────────────────────────────
+    function buildQRHtml(cards) {
+      // group cards
+      const byGroup = {};
+      GROUP_ORDER.forEach(g => byGroup[g] = []);
+      cards.forEach(c => { if (byGroup[c.group]) byGroup[c.group].push(c); });
+
+      const groupHtml = GROUP_ORDER.map(g => {
+        const items = byGroup[g];
+        if (!items || items.length === 0) return '';
+        const itemsHtml = items.map(c => {
+          const drillBtn = `<button class="qr-drill-btn" onclick="App.goToGrammar('${c.id}')" title="Xem bài học">📖 Học</button>`;
+          const drillTrBtn = _hasTransformDrill(c.id) ? `<button class="qr-drill-btn qr-drill-transform" onclick="TransformDrill.open('${c.id}')" title="Luyện tập chuyển đổi">🔀 Luyện tập</button>` : '';
+          const trapHtml = c.trap ? `<div class="qr-trap">⚠️ ${c.trap}</div>` : '';
+          return `
+            <div class="qr-item" data-keywords="${(c.title + ' ' + c.keywords + ' ' + c.vi).toLowerCase()}">
+              <div class="qr-item-head">
+                <span class="qr-title">${c.title}</span>
+                <div class="qr-actions">${drillBtn}${drillTrBtn}</div>
+              </div>
+              <div class="qr-formula" onclick="navigator.clipboard?.writeText('${c.formula.replace(/'/g,"\\'")}').then(()=>{this.classList.add('copied');setTimeout(()=>this.classList.remove('copied'),1200)})" title="Click để copy công thức">
+                <span class="qr-formula-text">${c.formula}</span>
+                <span class="qr-copy-icon">📋</span>
+              </div>
+              <div class="qr-vi">${c.vi}</div>
+              <div class="qr-keys">🔑 ${c.keys}</div>
+              <div class="qr-example">✦ ${c.example}</div>
+              ${trapHtml}
+            </div>`;
+        }).join('');
+        return `
+          <div class="qr-group">
+            <div class="qr-group-head" onclick="this.parentElement.classList.toggle('collapsed')">
+              <span class="qr-group-title">${g}</span>
+              <span class="qr-group-count">${items.length} rule</span>
+              <span class="qr-chevron">▾</span>
+            </div>
+            <div class="qr-group-body">${itemsHtml}</div>
+          </div>`;
+      }).join('');
+
+      return groupHtml;
+    }
+
+    // ── Initial render ─────────────────────────────────────────
+    area.innerHTML = `
+      <div class="qr-wrap">
+        <div class="qr-header">
+          <div class="qr-search-wrap">
+            <span class="qr-search-icon">🔍</span>
+            <input type="text" id="qr-search" class="qr-search" placeholder="Tìm nhanh: by the time, subjunctive, look forward to...">
+            <button class="qr-search-clear" id="qr-search-clear" style="display:none">✕</button>
+          </div>
+          <div class="qr-meta" id="qr-meta">${QR_CARDS.length} rules · Click công thức để copy · Click nhóm để ẩn/hiện</div>
+        </div>
+        <div id="qr-content">${buildQRHtml(QR_CARDS)}</div>
+      </div>`;
+
+    // ── Wire search ────────────────────────────────────────────
+    const searchEl = document.getElementById('qr-search');
+    const clearBtn = document.getElementById('qr-search-clear');
+    const metaEl   = document.getElementById('qr-meta');
+    const contentEl = document.getElementById('qr-content');
+
+    function doSearch(q) {
+      clearBtn.style.display = q ? 'block' : 'none';
+      if (!q) {
+        contentEl.innerHTML = buildQRHtml(QR_CARDS);
+        metaEl.textContent = `${QR_CARDS.length} rules · Click công thức để copy`;
+        return;
+      }
+      const lq = q.toLowerCase();
+      const filtered = QR_CARDS.filter(c =>
+        (c.title + ' ' + c.keywords + ' ' + c.vi + ' ' + c.formula + ' ' + c.keys + ' ' + (c.trap||'')).toLowerCase().includes(lq)
+      );
+      if (filtered.length === 0) {
+        contentEl.innerHTML = `<div class="qr-empty">Không tìm thấy kết quả cho "<b>${q}</b>"</div>`;
+        metaEl.textContent = '0 kết quả';
+        return;
+      }
+      // Render flat (no group collapsing) when searching
+      const flatHtml = filtered.map(c => {
+        const drillBtn = `<button class="qr-drill-btn" onclick="App.goToGrammar('${c.id}')" title="Xem bài học">📖 Học</button>`;
+        const drillTrBtn = _hasTransformDrill(c.id) ? `<button class="qr-drill-btn qr-drill-transform" onclick="TransformDrill.open('${c.id}')" title="Luyện tập">🔀 Luyện tập</button>` : '';
+        const trapHtml = c.trap ? `<div class="qr-trap">⚠️ ${c.trap}</div>` : '';
+        const groupTag = `<span class="qr-group-tag">${c.group}</span>`;
+        return `
+          <div class="qr-item qr-item-search">
+            <div class="qr-item-head">
+              <div><span class="qr-title">${c.title}</span>${groupTag}</div>
+              <div class="qr-actions">${drillBtn}${drillTrBtn}</div>
+            </div>
+            <div class="qr-formula" onclick="navigator.clipboard?.writeText('${c.formula.replace(/'/g,"\\'")}').then(()=>{this.classList.add('copied');setTimeout(()=>this.classList.remove('copied'),1200)})" title="Click để copy">
+              <span class="qr-formula-text">${c.formula}</span>
+              <span class="qr-copy-icon">📋</span>
+            </div>
+            <div class="qr-vi">${c.vi}</div>
+            <div class="qr-keys">🔑 ${c.keys}</div>
+            <div class="qr-example">✦ ${c.example}</div>
+            ${trapHtml}
+          </div>`;
+      }).join('');
+      contentEl.innerHTML = `<div class="qr-flat">${flatHtml}</div>`;
+      metaEl.textContent = `${filtered.length} kết quả cho "${q}"`;
+    }
+
+    searchEl.addEventListener('input', e => doSearch(e.target.value.trim()));
+    clearBtn.addEventListener('click', () => { searchEl.value = ''; doSearch(''); searchEl.focus(); });
+    searchEl.focus();
+  }
+
+  function _renderGrammarContentMain(topic, area) {
     // ── Drill pool ──
     const drillPool = flatQuestions.filter(q => q.part === 5 && q.type === topic.id);
     const drillCount = drillPool.length;
@@ -1262,30 +1740,58 @@ const App = (() => {
     });
   }
 
+  // ── Type shortcode decode (mirror of teacher-core.js) ──
+  const _EXAM_SHORT_TO_TYPE = {
+    'VC':'vocabulary',      'VX':'vocabulary-context', 'WF':'word-form',
+    'VT':'verb-tense',      'PV':'passive',            'CD':'conditionals',
+    'PP':'prepositions',    'CJ':'conjunction',        'RC':'relative-clause',
+    'PR':'pronoun',         'MD':'modal',              'GI':'gerund-infinitive',
+    'CM':'comparison',      'PT':'participles',        'SV':'subject-verb',
+    'NC':'noun-clauses',    'AT':'adverb-time',        'IV':'inversion',
+    'QT':'quantifiers',     'SJ':'subjunctive',        'PS':'prep-structures',
+    'BE':'business-english',
+  };
+  function _decodeExamTypes(str) {
+    if (!str || str.toUpperCase() === 'ALL') return [];
+    return str.toUpperCase().split('.').map(s => _EXAM_SHORT_TO_TYPE[s] || null).filter(Boolean);
+  }
+
   function handleHomeworkCode(code) {
-    // Định dạng EXAM: EXAM-P{p5Count}-G{p6Groups}-Q{p7Questions}-{seed}
-    const examMatch = code.match(/EXAM-P(\d+)-G(\d+)-Q(\d+)-(\d+)/i);
-    if (examMatch) {
-      const p5Count = parseInt(examMatch[1]);
-      const p6Groups = parseInt(examMatch[2]);
-      const p7Questions = parseInt(examMatch[3]);
-      const seed = parseInt(examMatch[4]);
-      generateExamFromCode(p5Count, p6Groups, p7Questions, seed);
+    code = code.trim().toUpperCase();
+
+    // ── v4: EXAM-P{n}-G{n}-Q{n}-T{types}-{seed} ──
+    const v4 = code.match(/^EXAM-P(\d+)-G(\d+)-Q(\d+)-T([A-Z0-9.]+)-(\d+)$/i);
+    if (v4) {
+      const p5Count     = parseInt(v4[1]);
+      const p6Groups    = parseInt(v4[2]);
+      const p7Questions = parseInt(v4[3]);
+      const filterTypes = _decodeExamTypes(v4[4]);
+      const seed        = parseInt(v4[5]);
+      generateExamFromCode(p5Count, p6Groups, p7Questions, seed, filterTypes);
       return;
     }
-    
-    // Định dạng chuẩn: HW-UNIT-{unitId}-{seed}
-    const match = code.match(/HW-UNIT-(\d+)-(\d+)/i);
-    if (match) {
-      _currentUnitId = parseInt(match[1]);
-      generateUnitQuiz(parseInt(match[1]), parseInt(match[2]));
+
+    // ── v3 legacy: EXAM-P{n}-G{n}-Q{n}-{seed} (no type filter) ──
+    const v3 = code.match(/^EXAM-P(\d+)-G(\d+)-Q(\d+)-(\d+)$/i);
+    if (v3) {
+      generateExamFromCode(parseInt(v3[1]), parseInt(v3[2]), parseInt(v3[3]), parseInt(v3[4]), []);
+      return;
+    }
+
+    // ── HW-UNIT / HW-LP: {unitId}-{seed} ──
+    const hwMatch = code.match(/HW-(?:UNIT|LP)-(\d+)-(\d+)/i);
+    if (hwMatch) {
+      _currentUnitId = parseInt(hwMatch[1]);
+      generateUnitQuiz(parseInt(hwMatch[1]), parseInt(hwMatch[2]));
+      return;
+    }
+
+    // ── Fallbacks ──
+    const oldUnit = code.match(/HW-UNIT-(\d+)$/i);
+    if (oldUnit) {
+      showToast('Mã cũ — thiếu seed. Dùng mã mới từ giáo viên (VD: HW-UNIT-1-4823)', '⚠️');
     } else {
-      const fallback = code.match(/HW-UNIT-(\d+)/i);
-      if (fallback) {
-        showToast('Mã cũ — không có seed. Vui lòng dùng mã mới từ giáo viên (VD: HW-UNIT-1-4823)', '⚠️');
-      } else {
-        showToast('Mã không hợp lệ. Định dạng: HW-UNIT-1-4823 hoặc EXAM-P30-G4-Q54-123456', '⚠️');
-      }
+      showToast('Mã không hợp lệ. Định dạng: EXAM-P20-G2-Q0-TWF.VT-123456 hoặc HW-UNIT-1-4823', '⚠️');
     }
   }
 
@@ -1310,41 +1816,27 @@ const App = (() => {
   }
 
   function generateUnitQuiz(unitId, seed) {
-    const unit     = UNIT_METADATA.find(u => u.id === unitId);
-    const prevUnit = UNIT_METADATA.find(u => u.id === unitId - 1);
+    const unit = UNIT_METADATA.find(u => u.id === unitId);
     if (!unit) { showToast('Không tìm thấy dữ liệu cho Unit này.', '❌'); return; }
 
     const isTeacher  = (seed === undefined || seed === null);
     const activeSeed = isTeacher ? (Math.floor(Math.random() * 9000) + 1000) : seed;
+    const keywords   = unit.vocab.map(k => k.toLowerCase());
 
-    const keywords    = unit.vocab.map(k => k.toLowerCase());
-    const grammar     = unit.grammar;
-    const prevGrammar = prevUnit ? prevUnit.grammar : null;
-
-    // Normalize grammar type aliases (type mismatches between UNIT_METADATA and question data)
-    const grammarAliases = { 'prepositions': 'preposition', 'preposition': 'prepositions' };
-    const grammarTypes = new Set([grammar, grammarAliases[grammar]].filter(Boolean));
-    const prevGrammarTypes = prevGrammar
-      ? new Set([prevGrammar, grammarAliases[prevGrammar]].filter(Boolean))
-      : new Set();
-
+    // Step 1: câu Part 5 có keyword liên quan vocab của unit
     let pool = flatQuestions.filter(q => {
       if (q.part !== 5) return false;
-      return grammarTypes.has(q.type) || (prevGrammar && prevGrammarTypes.has(q.type));
+      const text = (q.question + ' ' + (q.explanation || '') + ' ' + (q.options || []).join(' ')).toLowerCase();
+      return keywords.some(k => text.includes(k));
     });
 
+    // Step 2: nếu chưa đủ 20 → bổ sung từ Part 5 ngẫu nhiên (đa dạng ngữ pháp)
     if (pool.length < 20) {
-      const byVocab = flatQuestions.filter(q => {
-        if (q.part !== 5 || pool.includes(q)) return false;
-        const text = (q.question + ' ' + (q.explanation || '')).toLowerCase();
-        return keywords.some(k => text.includes(k));
-      });
-      pool.push(...seededShuffle(byVocab, activeSeed + 1).slice(0, 20 - pool.length));
-    }
-
-    if (pool.length < 20) {
-      const remaining = flatQuestions.filter(q => q.part === 5 && !pool.includes(q));
-      pool.push(...seededShuffle(remaining, activeSeed + 2).slice(0, 20 - pool.length));
+      const extra = seededShuffle(
+        flatQuestions.filter(q => q.part === 5 && !pool.includes(q)),
+        activeSeed
+      ).slice(0, 20 - pool.length);
+      pool.push(...extra);
     }
 
     if (pool.length === 0) { showToast(`Chưa có câu hỏi cho Unit ${unitId}.`, 'ℹ️'); return; }
@@ -1368,13 +1860,13 @@ const App = (() => {
 
     const unseenBadge = document.getElementById('quiz-unseen-badge');
     if (unseenBadge) {
-      unseenBadge.textContent   = `📚 Ôn tập: ${unit.title}${prevUnit ? ` | 🔄 Recycling: ${prevUnit.grammar}` : ''}`;
+      unseenBadge.textContent   = `📚 Unit ${unitId}: ${unit.title}`;
       unseenBadge.style.display = 'inline-block';
     }
 
     if (isTeacher) {
       const hwCode = `HW-UNIT-${unitId}-${activeSeed}`;
-      showToast(`Đã tạo bộ câu hỏi! Mã học viên: ${hwCode}`, '🔑');
+      showToast(`Đã tạo bộ câu hỏi! Mã: ${hwCode}`, '🔑');
       const input = document.getElementById('homework-code-input');
       if (input) input.value = hwCode;
     } else {
@@ -1386,91 +1878,92 @@ const App = (() => {
     renderQuestion();
   }
 
-  // ─── Generate Exam from Code (Mock Test) ───
-  function generateExamFromCode(p5Count, p6Groups, p7Questions, seed) {
-    // Dùng cùng logic với teacher để tái tạo đúng đề thi
-    
-    // Part 5: seeded shuffle
-    const p5pool = seededShuffle([...DB.questions.part5], seed);
+  // ─── Generate Exam from Code (Mock Test) – v4 ───
+  // filterTypes: string[] của q.type values, [] = không lọc (dùng tất cả)
+  function generateExamFromCode(p5Count, p6Groups, p7Questions, seed, filterTypes) {
+    filterTypes = filterTypes || [];
+
+    // Part 5: seeded shuffle → áp type filter nếu có
+    let p5pool = seededShuffle([...DB.questions.part5], seed);
+    if (filterTypes.length > 0) {
+      p5pool = p5pool.filter(q => filterTypes.includes(q.type));
+    }
     const selectedP5 = p5pool.slice(0, Math.min(p5Count, p5pool.length));
-    
+
     // Part 6: seeded shuffle
     const p6groupsPool = DB.questions.part6.filter(g => g.questions.length === 4);
     const selectedP6 = seededShuffle(p6groupsPool, seed + 1).slice(0, Math.min(p6Groups, p6groupsPool.length));
-    
-    // Part 7: seeded shuffle theo loại (cùng logic với teacher)
+
+    // Part 7: seeded shuffle theo loại
     const p7singles = seededShuffle(DB.questions.part7.filter(g => g.type === 'single' || !g.type), seed + 2);
     const p7doubles = seededShuffle(DB.questions.part7.filter(g => g.type === 'double'), seed + 3);
     const p7triples = seededShuffle(DB.questions.part7.filter(g => g.type === 'triple'), seed + 4);
-    
+
     const selectedP7 = [];
     let p7count = 0;
     const addP7 = list => {
       for (const g of list) {
-        if (p7count + g.questions.length <= p7Questions) { 
-          selectedP7.push(g); 
-          p7count += g.questions.length; 
+        if (p7count + g.questions.length <= p7Questions) {
+          selectedP7.push(g);
+          p7count += g.questions.length;
         }
       }
     };
     addP7(p7triples.slice(0, 3));
     addP7(p7doubles.slice(0, 2));
     addP7(p7singles);
-    
-    // Flatten các câu hỏi
+
+    // Flatten
     quizQuestions = [];
     selectedP5.forEach(q => quizQuestions.push({...q, part: 5}));
     selectedP6.forEach(grp => {
       grp.questions.forEach(q => quizQuestions.push({
-        ...q, 
-        part: 6, 
-        passage: grp.passage, 
-        passageTitle: grp.passageTitle,
-        type: grp.type
+        ...q, part: 6, passage: grp.passage, passageTitle: grp.passageTitle, type: grp.type
       }));
     });
     selectedP7.forEach(grp => {
       grp.questions.forEach(q => quizQuestions.push({
-        ...q, 
-        part: 7, 
-        passage: grp.passage, 
-        passageTitle: grp.passageTitle,
-        type: grp.type
+        ...q, part: 7, passage: grp.passage, passageTitle: grp.passageTitle, type: grp.type
       }));
     });
-    
+
     if (quizQuestions.length === 0) {
       showToast('❌ Không thể tải đề thi. Vui lòng kiểm tra mã.', '⚠️');
       return;
     }
-    
+
     // Setup quiz state
-    quizIndex = 0; 
-    quizScore = 0; 
+    quizIndex = 0;
+    quizScore = 0;
     quizAnswered = 0;
     quizUserAnswers = new Array(quizQuestions.length).fill(null);
-    quizTimeLeft = 4500; // 75 phút cho full Reading
+    quizTimeLeft = 4500;
     quizMode = 'mock-exam';
-    
-    document.getElementById('quiz-setup').style.display = 'none';
-    document.getElementById('quiz-container').style.display = 'block';
+
+    document.getElementById('quiz-setup').style.display      = 'none';
+    document.getElementById('quiz-container').style.display  = 'block';
     document.getElementById('results-container').style.display = 'none';
-    document.getElementById('quiz-total').textContent = quizQuestions.length;
-    
+    document.getElementById('quiz-total').textContent        = quizQuestions.length;
+
     const partLabel = document.getElementById('quiz-part-label');
-    partLabel.textContent = 'Mock Test';
-    partLabel.className = 'tag';
+    partLabel.textContent   = 'Mock Test';
+    partLabel.className     = 'tag';
     partLabel.style.background = '#dc2626';
-    partLabel.style.color = '#fff';
-    
+    partLabel.style.color      = '#fff';
+
+    const p6q = selectedP6.reduce((s, g) => s + g.questions.length, 0);
+    const p7q = selectedP7.reduce((s, g) => s + g.questions.length, 0);
+    const typeLabel = filterTypes.length > 0 ? ` · ${filterTypes.join(', ')}` : '';
+
     const unseenBadge = document.getElementById('quiz-unseen-badge');
     if (unseenBadge) {
-      unseenBadge.textContent = `📝 Full Reading: ${selectedP5.length} P5 + ${selectedP6.reduce((s,g) => s + g.questions.length, 0)} P6 + ${selectedP7.reduce((s,g) => s + g.questions.length, 0)} P7`;
+      unseenBadge.textContent   = `📝 ${selectedP5.length} P5${typeLabel} + ${p6q} P6 + ${p7q} P7`;
       unseenBadge.style.display = 'inline-block';
     }
-    
-    showToast(`✅ Đã tải Mock Test (${quizQuestions.length} câu)`, '📝');
-    
+
+    showToast(`✅ Đã tải Mock Test (${quizQuestions.length} câu${typeLabel})`, '📝');
+
+    navigate('practice');
     startTimer();
     renderQuestionNavigator();
     renderQuestion();
@@ -1813,7 +2306,7 @@ const App = (() => {
     }
     updateFcStats();
     fcIndex++;
-    setTimeout(renderFcCard, 180);
+    setTimeout(renderFcCardSRS, 180);
   }
 
   // ─── Patch openFlashcard to use SRS-sorted deck ────────────
@@ -1878,15 +2371,9 @@ const App = (() => {
     document.getElementById('fc-progress-bar').style.width = pct + '%';
     updateFcStats();
 
-    // Show 3-button rating row (Again / Good / Easy) after flip
+    // Hide actions — will be shown + populated on flip
     const actionsEl = document.getElementById('fc-actions');
-    if (actionsEl) actionsEl.innerHTML = `
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
-        <button class="btn" style="background:rgba(244,63,94,.18);border:1px solid var(--danger);color:var(--danger);font-size:.8rem" onclick="App.rateCardSRS('wrong')">😓 Chưa nhớ</button>
-        <button class="btn" style="background:rgba(79,142,247,.15);border:1px solid var(--accent);color:var(--accent);font-size:.8rem" onclick="App.rateCardSRS('right')">👍 Nhớ rồi</button>
-        <button class="btn" style="background:rgba(16,185,129,.12);border:1px solid var(--success);color:var(--success);font-size:.8rem" onclick="App.rateCardSRS('easy')">⚡ Dễ quá!</button>
-      </div>
-      <button class="btn btn-outline btn-sm" onclick="App.skipCard()" style="width:100%;margin-top:10px;font-size:.8rem;color:var(--text-muted)">Bỏ qua →</button>`;
+    if (actionsEl) { actionsEl.style.display = 'none'; actionsEl.innerHTML = ''; }
 
     // Mark vocab as seen
     const prog = getProgress();
@@ -2151,55 +2638,66 @@ const App = (() => {
     const scores = prog.unitScores || {};
     const unitsDone = Object.values(scores).filter(s => s.pct >= 70).length;
 
-    // Header thống kê tổng
-    const headerEl = document.getElementById('units-header');
-    if (headerEl) {
-      const totalVocab = DB.vocab.length;
-      const seenVocab  = prog.vocabSeen || 0;
-      headerEl.innerHTML = `
-        <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px">
-          <div class="stat-card" style="flex:1;min-width:120px">
-            <div class="stat-num" style="color:var(--accent)">${unitsDone}/${UNIT_METADATA.length}</div>
-            <div class="stat-label">Units hoàn thành</div>
-          </div>
-          <div class="stat-card" style="flex:1;min-width:120px">
-            <div class="stat-num" style="color:var(--success)">${seenVocab}</div>
-            <div class="stat-label">Từ đã học</div>
-          </div>
-          <div class="stat-card" style="flex:1;min-width:120px">
-            <div class="stat-num">${totalVocab}</div>
-            <div class="stat-label">Tổng từ vựng</div>
-          </div>
-        </div>`;
-    }
+    const pct = Math.round(unitsDone / UNIT_METADATA.length * 100);
+    const bar = document.getElementById('roadmap-progress-bar');
+    const countEl = document.getElementById('roadmap-done-count');
+    if (bar) bar.style.width = pct + '%';
+    if (countEl) countEl.textContent = unitsDone;
 
+    const headerEl = document.getElementById('units-header');
+    if (headerEl) headerEl.innerHTML = '';
+
+    // Card grid layout
     grid.innerHTML = UNIT_METADATA.map(unit => {
       const keywords  = unit.vocab.map(k => k.toLowerCase());
       const unitVocab = DB.vocab.filter(v => keywords.some(k => v.category.toLowerCase().includes(k)));
       const best      = scores[unit.id];
-      const pct       = best ? best.pct : 0;
-      const done      = pct >= 70;
-      const staleDate = best ? best.date : null;
-      const daysSince = staleDate ? Math.floor((Date.now() - new Date(staleDate).getTime()) / 864e5) : null;
-      const needReview = daysSince !== null && daysSince >= 7 && !done;
+      const unitPct   = best ? best.pct : 0;
+      const done      = unitPct >= 70;
+      const inProgress = unitPct > 0 && !done;
+      const knownIds  = new Set((getProgress().fcKnown_ids || []));
+      const knownInUnit = unitVocab.filter(v => knownIds.has(v.id)).length;
 
-      return `<div class="unit-card ${done?'unit-done':''}" onclick="App.showUnitDetail(${unit.id})">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
-          <div class="unit-num">Unit ${unit.id}</div>
-          ${needReview ? '<span style="font-size:.68rem;background:rgba(245,158,11,.15);color:var(--warning);padding:2px 7px;border-radius:10px;font-weight:700">⏰ Nên ôn lại</span>' : ''}
-          ${done ? '<span style="font-size:.68rem;background:rgba(34,197,94,.12);color:var(--success);padding:2px 7px;border-radius:10px;font-weight:700">✓ Hoàn thành</span>' : ''}
-        </div>
-        <div class="unit-title">${unit.title}</div>
-        <div style="font-size:.72rem;color:var(--text-muted);margin:4px 0">${unitVocab.length} từ vựng · ${unit.grammar}</div>
-        <div class="unit-progress-wrap" style="margin:8px 0 6px">
-          <div class="unit-progress-fill" style="width:${pct}%"></div>
-        </div>
-        <div class="unit-score-row">
-          <span>${pct > 0
-            ? `Best: <b style="color:${pct>=80?'var(--success)':pct>=60?'var(--warning)':'var(--danger)'}">${pct}%</b>${best.date ? ` · ${best.date}` : ''}`
-            : '<span style="color:var(--text-muted)">Chưa làm bài</span>'}</span>
-        </div>
-      </div>`;
+      const staleDate  = best ? best.date : null;
+      const daysSince  = staleDate ? Math.floor((Date.now() - new Date(staleDate).getTime()) / 864e5) : null;
+      const needReview = daysSince !== null && daysSince >= 7 && done;
+
+      const stateClass = done ? 'uc-done' : inProgress ? 'uc-progress' : 'uc-new';
+      const vocabBarPct = unitVocab.length > 0 ? Math.round(knownInUnit / unitVocab.length * 100) : 0;
+
+      return `
+        <div class="unit-card-v2 ${stateClass}" onclick="App.showUnitDetail(${unit.id})">
+          <div class="uc-top">
+            <div class="uc-num">Unit ${unit.id}</div>
+            <div class="uc-badges">
+              ${done        ? '<span class="uc-badge uc-badge-done">✓ Xong</span>'     : ''}
+              ${inProgress  ? '<span class="uc-badge uc-badge-prog">● Đang học</span>' : ''}
+              ${needReview  ? '<span class="uc-badge uc-badge-warn">⏰ Ôn lại</span>'  : ''}
+            </div>
+          </div>
+          <div class="uc-title">${unit.title}</div>
+          <div class="uc-meta">📚 ${unitVocab.length} từ vựng</div>
+
+          <!-- Dual progress bars -->
+          <div class="uc-bars">
+            <div class="uc-bar-row">
+              <span class="uc-bar-label">Từ vựng</span>
+              <div class="uc-bar-bg"><div class="uc-bar-fill uc-bar-vocab" style="width:${vocabBarPct}%"></div></div>
+              <span class="uc-bar-val">${vocabBarPct}%</span>
+            </div>
+            <div class="uc-bar-row">
+              <span class="uc-bar-label">Kiểm tra</span>
+              <div class="uc-bar-bg"><div class="uc-bar-fill uc-bar-quiz" style="width:${unitPct}%"></div></div>
+              <span class="uc-bar-val" style="color:${unitPct>=70?'var(--success)':unitPct>0?'var(--warning)':'var(--text-muted)'}">${unitPct > 0 ? unitPct + '%' : '—'}</span>
+            </div>
+          </div>
+
+          <!-- Quick-action buttons -->
+          <div class="uc-actions" onclick="event.stopPropagation()">
+            <button class="uc-btn uc-btn-fc" onclick="App.openUnitFlashcard(${unit.id})">🃏 Flashcard</button>
+            <button class="uc-btn uc-btn-quiz" onclick="App.startUnitQuizFromPage(${unit.id})">${done ? '🔁 Ôn lại' : '✏️ Quiz'}</button>
+          </div>
+        </div>`;
     }).join('');
   }
 
@@ -2207,82 +2705,123 @@ const App = (() => {
     const unit = UNIT_METADATA.find(u => u.id === unitId);
     if (!unit) return;
 
-    const keywords  = unit.vocab.map(k => k.toLowerCase());
-    const unitVocab = DB.vocab.filter(v => keywords.some(k => v.category.toLowerCase().includes(k)));
-    const prog      = getProgress();
-    const scores    = prog.unitScores || {};
-    const best      = scores[unitId];
+    const keywords   = unit.vocab.map(k => k.toLowerCase());
+    const unitVocab  = DB.vocab.filter(v => keywords.some(k => v.category.toLowerCase().includes(k)));
+    const prog       = getProgress();
+    const scores     = prog.unitScores || {};
+    const best       = scores[unitId];
+    const knownIds   = new Set(prog.fcKnown_ids  || []);
+    const seenIds    = new Set(prog.vocabSeen_ids || []);
 
-    // Gom từ theo category để hiển thị có nhóm
+    // Mark all vocab as seen when panel opens
+    if (unitVocab.length > 0) {
+      const seen = new Set(prog.vocabSeen_ids || []);
+      const prev = seen.size;
+      unitVocab.forEach(v => seen.add(v.id));
+      if (seen.size !== prev) {
+        saveProgress({ vocabSeen: seen.size, vocabSeen_ids: [...seen] });
+        const el = document.getElementById('stat-vocab');
+        if (el) el.textContent = seen.size;
+      }
+    }
+
     const byCategory = {};
     unitVocab.forEach(v => {
       if (!byCategory[v.category]) byCategory[v.category] = [];
       byCategory[v.category].push(v);
     });
 
-    const bestHtml = best
-      ? `<span style="color:${best.pct>=80?'var(--success)':best.pct>=60?'var(--warning)':'var(--danger)'}">Best: <b>${best.pct}%</b> (${best.correct}/${best.total}) · ${best.date}</span>`
-      : '<span style="color:var(--text-muted)">Chưa làm bài thi Unit này</span>';
+    const unitPct     = best ? best.pct : 0;
+    const done        = unitPct >= 70;
+    const knownInUnit = unitVocab.filter(v => knownIds.has(v.id)).length;
+    const vocabPct    = unitVocab.length > 0 ? Math.round(knownInUnit / unitVocab.length * 100) : 0;
+    const step2done   = knownInUnit >= Math.ceil(unitVocab.length * 0.5);
 
-    const detailEl = document.getElementById('unit-detail');
-    detailEl.style.display = 'block';
-    detailEl.innerHTML = `
-      <div class="unit-detail-panel">
+    // Use the unit-detail overlay panel
+    const panel = document.getElementById('unit-detail-panel');
+    if (!panel) return;
+
+    panel.innerHTML = `
+      <div class="udp-inner">
         <!-- Header -->
-        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:12px">
+        <div class="udp-header">
           <div>
-            <div class="unit-detail-title">Unit ${unitId}: ${unit.title}</div>
-            <div style="font-size:.78rem;color:var(--text-muted);margin-top:3px">
-              ${unitVocab.length} từ vựng · Ngữ pháp: <b>${unit.grammar}</b>
-            </div>
+            <div class="udp-label">Unit ${unitId}</div>
+            <div class="udp-title">${unit.title}</div>
+            <div class="udp-meta">📚 ${unitVocab.length} từ vựng</div>
           </div>
-          <button onclick="document.getElementById('unit-detail').style.display='none'"
-            style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:1.1rem;flex-shrink:0">✕</button>
+          <button class="udp-close" onclick="App.closeUnitPanel()">✕</button>
         </div>
 
-        <!-- Điểm & nút hành động -->
-        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;
-                    background:var(--bg-primary);border:1px solid var(--border);border-radius:10px;
-                    padding:10px 14px;margin-bottom:16px">
-          <div style="font-size:.82rem">${bestHtml}</div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap">
-            <button class="btn btn-outline btn-sm" onclick="App.openUnitFlashcard(${unitId})">🃏 Flashcard</button>
-            <button class="btn btn-primary btn-sm" onclick="App.startUnitQuizFromPage(${unitId})">▶ Luyện tập</button>
+        <!-- Progress summary -->
+        <div class="udp-progress-row">
+          <div class="udp-prog-block">
+            <div class="udp-prog-label">Từ vựng</div>
+            <div class="udp-prog-bar-bg"><div class="udp-prog-bar-fill" style="width:${vocabPct}%;background:var(--accent-3)"></div></div>
+            <div class="udp-prog-val" style="color:var(--accent-3)">${vocabPct}%</div>
+          </div>
+          <div class="udp-prog-block">
+            <div class="udp-prog-label">Kiểm tra</div>
+            <div class="udp-prog-bar-bg"><div class="udp-prog-bar-fill" style="width:${unitPct}%;background:${done?'var(--success)':'var(--accent-2)'}"></div></div>
+            <div class="udp-prog-val" style="color:${done?'var(--success)':unitPct>0?'var(--warning)':'var(--text-muted)'}">${unitPct > 0 ? unitPct + '%' : '—'}</div>
           </div>
         </div>
 
-        <!-- Từ vựng đầy đủ theo category -->
-        ${Object.entries(byCategory).map(([cat, words]) => `
-          <div style="margin-bottom:14px">
-            <div style="font-size:.72rem;font-weight:700;color:var(--text-secondary);
-                        text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px;
-                        display:flex;align-items:center;gap:6px">
-              <span style="background:var(--accent);color:#fff;padding:1px 7px;border-radius:10px;font-size:.65rem">${cat}</span>
-              <span style="color:var(--text-muted)">${words.length} từ</span>
+        <!-- Action buttons — always visible at top -->
+        <div class="udp-actions">
+          <button class="udp-btn udp-btn-fc" onclick="App.openUnitFlashcard(${unitId})">
+            🃏 Flashcard
+          </button>
+          <button class="udp-btn udp-btn-quiz ${step2done ? '' : 'udp-btn-dim'}" onclick="App.startUnitQuizFromPage(${unitId})">
+            ${done ? '🔁 Ôn lại quiz' : '✏️ Bắt đầu quiz'}
+          </button>
+        </div>
+        ${!step2done ? '<div class="udp-hint">💡 Luyện Flashcard trước để quiz hiệu quả hơn</div>' : ''}
+
+        <!-- Vocab reading section -->
+        <div class="udp-section-label">👀 Từ vựng — đọc lướt làm quen</div>
+        <div class="udp-vocab">
+          ${Object.entries(byCategory).map(([cat, words]) => `
+            <div class="udp-cat-head">
+              <span class="udp-cat-tag">${cat}</span>
+              <span class="udp-cat-count">${words.length} từ</span>
             </div>
-            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:6px">
-              ${words.map(v => `
-                <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:8px;
-                            padding:8px 10px;cursor:pointer;transition:border-color .15s"
-                     onmouseenter="this.style.borderColor='var(--accent)'"
-                     onmouseleave="this.style.borderColor='var(--border)'"
-                     title="${v.example || ''}">
-                  <div style="display:flex;align-items:baseline;gap:6px;margin-bottom:2px">
-                    <span style="font-weight:700;color:var(--text-primary)">${v.word}</span>
-                    <span style="font-size:.7rem;color:var(--text-muted)">${v.type}</span>
-                    ${v.phonetic ? `<span style="font-size:.7rem;color:var(--accent)">${v.phonetic}</span>` : ''}
+            ${words.map(v => {
+              const isKnown = knownIds.has(v.id);
+              return `
+                <div class="udp-word-row ${isKnown ? 'udp-row-known' : ''}">
+                  <div class="udp-word-main">
+                    <span class="udp-word">${v.word}</span>
+                    <span class="udp-type">${v.type}</span>
+                    <span class="udp-phonetic">${v.phonetic}</span>
+                    ${isKnown ? '<span class="udp-known-tick">✓</span>' : ''}
                   </div>
-                  <div style="font-size:.78rem;color:var(--text-secondary)">${v.meaning}</div>
-                  ${v.example ? `<div style="font-size:.72rem;color:var(--text-muted);margin-top:3px;
-                                              font-style:italic;border-left:2px solid var(--border);
-                                              padding-left:6px">${v.example}</div>` : ''}
-                </div>`).join('')}
-            </div>
-          </div>`).join('')}
-
-        ${unitVocab.length === 0 ? '<div style="color:var(--text-muted);text-align:center;padding:20px">Chưa có từ vựng cho unit này.</div>' : ''}
+                  <div class="udp-meaning">${v.meaning}</div>
+                  <div class="udp-example">"${v.example}"</div>
+                  <button class="udp-speak" onclick="event.stopPropagation();window.speechSynthesis&&window.speechSynthesis.speak(Object.assign(new SpeechSynthesisUtterance('${v.word.replace(/'/g,"\\'")}'),{lang:'en-US',rate:0.85}))">🔊</button>
+                </div>`;
+            }).join('')}
+          `).join('')}
+          ${unitVocab.length === 0 ? '<div class="udp-empty">Chưa có từ vựng cho unit này.</div>' : ''}
+        </div>
       </div>`;
-    detailEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+    // Show overlay
+    const overlay = document.getElementById('unit-detail-overlay');
+    if (overlay) {
+      overlay.style.display = 'flex';
+      overlay.classList.add('udp-open');
+      document.body.style.overflow = 'hidden';
+    }
+  }
+
+  function closeUnitPanel() {
+    const overlay = document.getElementById('unit-detail-overlay');
+    if (overlay) {
+      overlay.classList.remove('udp-open');
+      document.body.style.overflow = '';
+      setTimeout(() => { overlay.style.display = 'none'; }, 280);
+    }
   }
 
   function openUnitFlashcard(unitId) {
@@ -2557,6 +3096,16 @@ const App = (() => {
     if (page === 'stats')  { renderStatsPage(); }
     if (page === 'units')  { setupUnitsPage(); }
     if (page === 'home')   { renderStreakBanner(); }
+    if (page === 'vocab')  { updateDictHeroStats && updateDictHeroStats(); }
+    // FAB: chỉ hiện trên trang Home
+    const fab = document.getElementById('home-fab');
+    if (fab) {
+      if (page === 'home') {
+        fab.classList.add('fab-visible');
+      } else {
+        fab.classList.remove('fab-visible');
+      }
+    }
   }
 
   // ─── Modal ───
@@ -2585,6 +3134,294 @@ const App = (() => {
     setTimeout(() => t.classList.remove('show'), 3000);
   }
 
+  // ═══════════════════════════════════════════════════════════
+  //  GAME 1 — SPEED ROUND
+  //  Hiển thị từ + 1 nghĩa (đúng hoặc sai), người học chọn
+  //  Đúng/Sai trong 8 giây. 10 từ mỗi vòng.
+  // ═══════════════════════════════════════════════════════════
+  let vsrDeck = [], vsrIndex = 0, vsrCorrect = 0, vsrWrong = 0, vsrStreak = 0;
+  let vsrTimer = null, vsrTimeLeft = 0, vsrCurrentIsTrue = false;
+  const VSR_TIME = 8000;   // 8 giây mỗi từ
+  const VSR_ROUND = 10;    // 10 từ mỗi vòng
+
+  function openSpeedRound() {
+    const pool = getVocabDeck();
+    if (pool.length < 4) { showToast('Cần ít nhất 4 từ.', '⚠️'); return; }
+    vsrDeck = shuffleArray([...pool]).slice(0, VSR_ROUND);
+    vsrIndex = 0; vsrCorrect = 0; vsrWrong = 0; vsrStreak = 0;
+    document.getElementById('vspeed-overlay').style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+    vsrRenderCard();
+  }
+
+  function closeSpeedRound() {
+    clearInterval(vsrTimer);
+    document.getElementById('vspeed-overlay').style.display = 'none';
+    document.body.style.overflow = '';
+    if (vsrCorrect + vsrWrong > 0)
+      showToast(`Speed Round: ${vsrCorrect} đúng · ${vsrWrong} sai`, '⚡');
+  }
+
+  function vsrRenderCard() {
+    clearInterval(vsrTimer);
+    if (vsrIndex >= vsrDeck.length) { vsrShowComplete(); return; }
+
+    const v = vsrDeck[vsrIndex];
+    // 50% chance: show correct meaning; 50%: show a wrong meaning
+    vsrCurrentIsTrue = Math.random() < 0.5;
+    let shownMeaning;
+    if (vsrCurrentIsTrue) {
+      shownMeaning = v.meaning;
+    } else {
+      // Pick a distractor from a different word
+      const others = vsrDeck.filter(x => x.id !== v.id);
+      shownMeaning = others[Math.floor(Math.random() * others.length)]?.meaning || v.meaning;
+      // Ensure it's actually different
+      if (shownMeaning === v.meaning) vsrCurrentIsTrue = true;
+    }
+
+    document.getElementById('vsr-word').textContent     = v.word;
+    document.getElementById('vsr-phonetic').textContent = v.phonetic;
+    document.getElementById('vsr-type').textContent     = v.type.toUpperCase();
+    document.getElementById('vsr-meaning-shown').textContent = shownMeaning;
+    document.getElementById('vsr-feedback').textContent = '';
+    document.getElementById('vsr-round-label').textContent = `${vsrIndex + 1} / ${vsrDeck.length}`;
+    document.getElementById('vsr-remaining').textContent = vsrDeck.length - vsrIndex;
+
+    // Enable buttons
+    document.getElementById('vsr-btn-true').disabled  = false;
+    document.getElementById('vsr-btn-false').disabled = false;
+    document.getElementById('vsr-btn-true').className  = 'vsr-choice-btn vsr-true';
+    document.getElementById('vsr-btn-false').className = 'vsr-choice-btn vsr-false';
+
+    // Timer bar
+    vsrTimeLeft = VSR_TIME;
+    const bar = document.getElementById('vsr-timer-bar');
+    bar.style.transition = 'none';
+    bar.style.width = '100%';
+    bar.style.background = 'linear-gradient(90deg,#fbbf24,#f59e0b)';
+    requestAnimationFrame(() => {
+      bar.style.transition = `width ${VSR_TIME}ms linear`;
+      bar.style.width = '0%';
+    });
+
+    vsrTimer = setInterval(() => {
+      vsrTimeLeft -= 100;
+      if (vsrTimeLeft <= 2000) bar.style.background = 'linear-gradient(90deg,#f43f5e,#e11d48)';
+      if (vsrTimeLeft <= 0) {
+        clearInterval(vsrTimer);
+        vsrTimeUp();
+      }
+    }, 100);
+
+    // Mark seen
+    const prog = getProgress();
+    const seen = new Set(prog.vocabSeen_ids || []);
+    seen.add(v.id);
+    saveProgress({ vocabSeen: seen.size, vocabSeen_ids: [...seen] });
+  }
+
+  function vsrAnswer(userSaysTrue) {
+    clearInterval(vsrTimer);
+    const v = vsrDeck[vsrIndex];
+    const correct = (userSaysTrue === vsrCurrentIsTrue);
+
+    document.getElementById('vsr-btn-true').disabled  = true;
+    document.getElementById('vsr-btn-false').disabled = true;
+
+    const fb = document.getElementById('vsr-feedback');
+    if (correct) {
+      vsrCorrect++; vsrStreak++;
+      fb.style.color = 'var(--success)';
+      fb.textContent = vsrStreak >= 3 ? `🔥 Streak ${vsrStreak}! Chính xác!` : '✅ Chính xác!';
+      addXP(2, v.id + '-sr');
+    } else {
+      vsrWrong++; vsrStreak = 0;
+      fb.style.color = 'var(--danger)';
+      fb.textContent = `❌ Sai! Nghĩa đúng: "${v.meaning}"`;
+      const prog = getProgress();
+      const review = new Set(prog.fcReview_ids || []);
+      review.add(v.id);
+      saveProgress({ fcReview_ids: [...review] });
+    }
+
+    document.getElementById('vsr-correct').textContent = vsrCorrect;
+    document.getElementById('vsr-wrong').textContent   = vsrWrong;
+    document.getElementById('vsr-streak').textContent  = vsrStreak;
+
+    vsrIndex++;
+    setTimeout(vsrRenderCard, 1100);
+  }
+
+  function vsrTimeUp() {
+    const v = vsrDeck[vsrIndex];
+    vsrWrong++; vsrStreak = 0;
+    document.getElementById('vsr-btn-true').disabled  = true;
+    document.getElementById('vsr-btn-false').disabled = true;
+    const fb = document.getElementById('vsr-feedback');
+    fb.style.color = 'var(--warning)';
+    fb.textContent = `⏰ Hết giờ! Nghĩa đúng: "${v.meaning}"`;
+    document.getElementById('vsr-correct').textContent = vsrCorrect;
+    document.getElementById('vsr-wrong').textContent   = vsrWrong;
+    document.getElementById('vsr-streak').textContent  = vsrStreak;
+    vsrIndex++;
+    setTimeout(vsrRenderCard, 1300);
+  }
+
+  function vsrShowComplete() {
+    clearInterval(vsrTimer);
+    const pct = Math.round(vsrCorrect / vsrDeck.length * 100);
+    const emoji = pct >= 80 ? '🏆' : pct >= 60 ? '👍' : '💪';
+    const bar = document.getElementById('vsr-timer-bar');
+    if (bar) { bar.style.transition = 'none'; bar.style.width = '100%'; bar.style.background = 'var(--success)'; }
+
+    document.getElementById('vsr-word').style.fontSize = '2.5rem';
+    document.getElementById('vsr-word').textContent    = emoji;
+    document.getElementById('vsr-phonetic').textContent = '';
+    document.getElementById('vsr-type').textContent     = '';
+    document.getElementById('vsr-meaning-shown').textContent = '';
+    document.getElementById('vsr-round-label').textContent   = 'Kết thúc';
+    document.getElementById('vsr-remaining').textContent     = '0';
+
+    const fb = document.getElementById('vsr-feedback');
+    fb.style.color   = pct >= 60 ? 'var(--success)' : 'var(--warning)';
+    fb.textContent   = `Vòng kết thúc! ${vsrCorrect}/${vsrDeck.length} đúng (${pct}%)`;
+
+    // Replace True/False buttons with Replay button
+    const trueBtn  = document.getElementById('vsr-btn-true');
+    const falseBtn = document.getElementById('vsr-btn-false');
+    if (trueBtn)  trueBtn.style.display  = 'none';
+    if (falseBtn) falseBtn.style.display = 'none';
+
+    const replayWrap = document.createElement('div');
+    replayWrap.style.cssText = 'grid-column:1/-1;margin-top:4px';
+    replayWrap.innerHTML = `<button class="btn btn-primary" style="width:100%" onclick="App.openSpeedRound()">🔄 Chơi lại vòng mới</button>`;
+    trueBtn?.parentNode?.appendChild(replayWrap);
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  //  GAME 2 — WORD CHAIN
+  //  Câu ví dụ thực tế có chỗ blank, chọn từ đúng từ word bank.
+  //  Giống Part 5 nhưng có context đoạn văn ngắn.
+  // ═══════════════════════════════════════════════════════════
+  let vwcDeck = [], vwcIndex = 0, vwcCorrect = 0, vwcWrong = 0;
+
+  function openWordChain() {
+    const pool = getVocabDeck().filter(v => v.example && v.example.toLowerCase().includes(v.word.toLowerCase()));
+    if (pool.length < 4) { showToast('Không đủ câu ví dụ cho Word Chain.', '⚠️'); return; }
+    vwcDeck = shuffleArray([...pool]);
+    vwcIndex = 0; vwcCorrect = 0; vwcWrong = 0;
+    document.getElementById('vchain-overlay').style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+    vwcRenderCard();
+  }
+
+  function closeWordChain() {
+    document.getElementById('vchain-overlay').style.display = 'none';
+    document.body.style.overflow = '';
+    if (vwcCorrect + vwcWrong > 0)
+      showToast(`Word Chain: ${vwcCorrect} đúng · ${vwcWrong} sai`, '🧩');
+  }
+
+  function vwcRenderCard() {
+    if (vwcIndex >= vwcDeck.length) {
+      vwcDeck = shuffleArray([...vwcDeck]);
+      vwcIndex = 0;
+    }
+    const v = vwcDeck[vwcIndex];
+
+    // Build sentence with blank
+    const regex = new RegExp(v.word.replace(/[-/\\^$*+?.()|[\]{}]/g,'\\$&'), 'i');
+    const blanked = v.example.replace(regex, '<span class="vwc-blank" id="vwc-blank-slot">_______</span>');
+
+    // Context hint = category + type
+    document.getElementById('vwc-sentence').innerHTML = blanked;
+    document.getElementById('vwc-context-hint').textContent =
+      `Gợi ý: [${v.type}] · Chủ đề: ${v.category}`;
+
+    // Progress
+    document.getElementById('vwc-progress').textContent = `${vwcIndex + 1} / ${vwcDeck.length}`;
+    document.getElementById('vwc-progress-bar').style.width =
+      Math.round(vwcIndex / vwcDeck.length * 100) + '%';
+
+    // Build word bank: correct + 4 distractors (same category preferred)
+    let distractors = vwcDeck.filter(x => x.id !== v.id && x.category === v.category);
+    if (distractors.length < 4) distractors = vwcDeck.filter(x => x.id !== v.id);
+    shuffleArray(distractors);
+    const opts = shuffleArray([v, ...distractors.slice(0, 4)]);
+
+    document.getElementById('vwc-word-bank').innerHTML = opts.map(opt =>
+      `<button class="vwc-chip" onclick="App.vwcSelect('${opt.word.replace(/'/g,"\\'")}','${v.word.replace(/'/g,"\\'")}')">
+        ${opt.word}
+        <span style="font-size:.65rem;color:var(--text-muted);margin-left:4px">[${opt.type}]</span>
+      </button>`
+    ).join('');
+
+    document.getElementById('vwc-result-box').style.display = 'none';
+    document.getElementById('vwc-next-wrap').style.display  = 'none';
+    document.getElementById('vwc-correct').textContent = vwcCorrect;
+    document.getElementById('vwc-wrong').textContent   = vwcWrong;
+
+    // Mark seen
+    const prog = getProgress();
+    const seen = new Set(prog.vocabSeen_ids || []);
+    seen.add(v.id);
+    saveProgress({ vocabSeen: seen.size, vocabSeen_ids: [...seen] });
+  }
+
+  function vwcSelect(chosen, correct) {
+    // Disable all chips
+    document.querySelectorAll('.vwc-chip').forEach(c => c.disabled = true);
+    const v = vwcDeck[vwcIndex];
+    const isRight = chosen.toLowerCase() === correct.toLowerCase();
+
+    // Fill the blank slot with chosen word
+    const slot = document.getElementById('vwc-blank-slot');
+    if (slot) {
+      slot.textContent = chosen;
+      slot.style.color = isRight ? 'var(--success)' : 'var(--danger)';
+      slot.style.borderBottom = `2px solid ${isRight ? 'var(--success)' : 'var(--danger)'}`;
+      slot.style.fontWeight = '700';
+    }
+
+    // Highlight chosen chip
+    document.querySelectorAll('.vwc-chip').forEach(c => {
+      if (c.textContent.trim().startsWith(chosen)) {
+        c.classList.add(isRight ? 'vwc-chip-correct' : 'vwc-chip-wrong');
+      }
+      if (!isRight && c.textContent.trim().startsWith(correct)) {
+        c.classList.add('vwc-chip-correct');
+      }
+    });
+
+    if (isRight) {
+      vwcCorrect++;
+      addXP(3, v.id + '-wc');
+    } else {
+      vwcWrong++;
+      const prog = getProgress();
+      const review = new Set(prog.fcReview_ids || []);
+      review.add(v.id);
+      saveProgress({ fcReview_ids: [...review] });
+    }
+
+    const rb = document.getElementById('vwc-result-box');
+    rb.className = 'vquiz-result-box ' + (isRight ? 'result-correct' : 'result-wrong');
+    rb.innerHTML = isRight
+      ? `✅ <strong>Chính xác!</strong> — <em>${v.meaning}</em>`
+      : `❌ Đáp án đúng: <strong style="color:var(--success)">${correct}</strong> — <em>${v.meaning}</em>`;
+    rb.style.display = 'block';
+
+    document.getElementById('vwc-correct').textContent = vwcCorrect;
+    document.getElementById('vwc-wrong').textContent   = vwcWrong;
+    document.getElementById('vwc-next-wrap').style.display = 'block';
+  }
+
+  function vwcNext() {
+    vwcIndex++;
+    vwcRenderCard();
+  }
+
   // ─── Public API (expose to teacher-core.js too) ───
   return {
     init, navigate: navigateGamified,
@@ -2597,8 +3434,10 @@ const App = (() => {
     openVocabQuiz, closeVocabQuiz, vqSelect, vqNext,
     openVocabFill, closeVocabFill, vfSelect, vfNext,
     openVocabMatch, closeVocabMatch, vmTileClick, vmNewRound,
-    // Gamification
-    showUnitDetail, openUnitFlashcard, startUnitQuizFromPage,
+    // New games
+    openSpeedRound, closeSpeedRound, vsrAnswer,
+    openWordChain, closeWordChain, vwcSelect, vwcNext,
+    showUnitDetail, closeUnitPanel, openUnitFlashcard, startUnitQuizFromPage,
     resetAllData,
     getDB: () => DB,
     getFlatQuestions: () => flatQuestions,
@@ -2616,4 +3455,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('app-modal').addEventListener('click', function(e) {
     if (e.target === this) App.closeModal();
   });
+  // Hiện FAB ngay khi load — trang home là mặc định
+  const fab = document.getElementById('home-fab');
+  if (fab) setTimeout(() => fab.classList.add('fab-visible'), 300);
 });
