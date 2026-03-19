@@ -1332,6 +1332,99 @@ body::after {
     line-height: 1.7;
 }
 
+
+/* ── Tip-box variants (added for grammar content) ── */
+/* Danger: Bẫy SAI/ĐÚNG – đỏ nhấn mạnh */
+.tip-box.tip-danger {
+    background: rgba(244, 63, 94, 0.08);
+    border-color: rgba(244, 63, 94, 0.35);
+    color: var(--text-secondary);
+}
+.tip-box.tip-danger b { color: #f87171; }
+
+/* Info: Quy tắc, ghi chú xanh dương */
+.tip-box.tip-info {
+    background: rgba(96, 165, 250, 0.08);
+    border-color: rgba(96, 165, 250, 0.3);
+    color: var(--text-secondary);
+}
+.tip-box.tip-info b { color: var(--accent); }
+
+/* Success: Quy tắc nhớ, mẹo tích cực – xanh lá */
+.tip-box.tip-ok {
+    background: rgba(16, 185, 129, 0.07);
+    border-color: rgba(16, 185, 129, 0.28);
+    color: var(--text-secondary);
+}
+.tip-box.tip-ok b { color: var(--success); }
+
+/* Default tip-box b/strong nhất quán */
+.tip-box b, .tip-box strong { color: var(--warning); }
+
+/* ── Confusable Pairs (Word Form) – dark-theme ── */
+.confuse-pair, .confuse-triple {
+    display: flex; gap: 10px; margin-bottom: 14px;
+    border: 1px solid var(--border); border-radius: 10px;
+    padding: 12px 14px;
+    background: rgba(255,255,255,0.03);
+}
+.cp-num {
+    font-size: 0.72rem; font-weight: 800; color: var(--text-muted);
+    min-width: 20px; padding-top: 2px;
+}
+.cp-body, .ct-body { flex: 1; min-width: 0; }
+.cp-row {
+    display: flex; align-items: center; gap: 8px;
+    margin-bottom: 8px; flex-wrap: wrap;
+}
+.cp-word {
+    flex: 1; min-width: 0; border-radius: 8px;
+    padding: 8px 10px;
+    display: flex; flex-direction: column; gap: 2px;
+}
+.cp-a { background: rgba(96, 165, 250, 0.1); border: 1px solid rgba(96,165,250,0.25); }
+.cp-b { background: rgba(251, 146, 60, 0.1); border: 1px solid rgba(251,146,60,0.25); }
+.cp-tag {
+    font-size: 0.62rem; font-weight: 800; letter-spacing: .5px;
+    padding: 1px 5px; border-radius: 4px; width: fit-content;
+    margin-bottom: 2px;
+}
+.cp-a .cp-tag { background: rgba(96,165,250,0.25); color: var(--accent); }
+.cp-b .cp-tag { background: rgba(251,146,60,0.25); color: #fb923c; }
+.cp-term { font-size: 0.92rem; font-weight: 700; line-height: 1.2; }
+.cp-a .cp-term { color: var(--accent); }
+.cp-b .cp-term { color: #fb923c; }
+.cp-note { font-size: 0.78rem; color: var(--text-secondary); line-height: 1.4; }
+.cp-vs {
+    font-size: 0.68rem; font-weight: 800; color: var(--text-muted);
+    padding: 0 4px; flex-shrink: 0; align-self: center;
+}
+.cp-examples {
+    display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 6px;
+}
+.cp-ex { flex: 1; min-width: 0; font-size: 0.79rem; color: var(--text-secondary); line-height: 1.6; }
+.cp-ex-a em { color: var(--accent); font-style: normal; }
+.cp-ex-b em { color: #fb923c; font-style: normal; }
+.cp-tip {
+    font-size: 0.77rem; color: var(--text-secondary);
+    background: rgba(16,185,129,0.07);
+    border: 1px solid rgba(16,185,129,0.2);
+    border-radius: 6px; padding: 6px 10px; line-height: 1.5;
+}
+.cp-tip b { color: var(--success); }
+/* Triple variant */
+.ct-words { display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+.ct-word { flex: 1; min-width: 120px; border-radius: 8px; padding: 8px 10px; }
+.ct-a { background: rgba(96,165,250,0.1); border: 1px solid rgba(96,165,250,0.25); }
+.ct-b { background: rgba(251,146,60,0.1); border: 1px solid rgba(251,146,60,0.25); }
+.ct-c { background: rgba(139,92,246,0.1); border: 1px solid rgba(139,92,246,0.25); }
+.ct-a b { color: var(--accent); }
+.ct-b b { color: #fb923c; }
+.ct-c b { color: var(--accent-2); }
+.ct-a .cp-tag { background: rgba(96,165,250,0.2); color: var(--accent); }
+.ct-b .cp-tag { background: rgba(251,146,60,0.2); color: #fb923c; }
+.ct-c .cp-tag { background: rgba(139,92,246,0.2); color: var(--accent-2); }
+
 /* ── Inline Grammar Quiz ── */
 .grammar-quiz {
     margin-top: 24px;
