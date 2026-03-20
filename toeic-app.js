@@ -179,6 +179,26 @@ const App = (() => {
                             : 'Chủ đề đã thành thạo';
       }
     }
+    // SRS due reminder on Home page
+    const srsReminderEl = document.getElementById('home-srs-reminder');
+    if (srsReminderEl) {
+      const due = qSrsDueCount();
+      const wrongTotal = getWrongIds().size;
+      if (due > 0) {
+        srsReminderEl.style.display = 'flex';
+        srsReminderEl.innerHTML = `
+          <div style="flex:1">
+            <span style="font-size:0.88rem;font-weight:700;color:#fbbf24">🔄 ${due} câu cần ôn hôm nay</span>
+            <span style="font-size:0.75rem;color:var(--text-muted);margin-left:8px">/ ${wrongTotal} câu sai tổng</span>
+          </div>
+          <button onclick="App.startWrongReview(true)" class="btn btn-sm"
+            style="border:1px solid rgba(251,191,36,0.4);color:#fbbf24;background:transparent;flex-shrink:0;white-space:nowrap">
+            Ôn ngay →
+          </button>`;
+      } else {
+        srsReminderEl.style.display = 'none';
+      }
+    }
   }
 
   // ─── Progress (localStorage) ───
@@ -208,7 +228,7 @@ const App = (() => {
     updateWrongCountUI();
   }
 
-  function buildSmartPool(rawPool) {
+  function buildSmartPool(rawPool, count) {
     const seen  = getSeenIds();
     const wrong = getWrongIds();
     const unseen      = rawPool.filter(q => q.id && !seen.has(q.id));
@@ -216,7 +236,34 @@ const App = (() => {
     const correctSeen = rawPool.filter(q => q.id && seen.has(q.id) && !wrong.has(q.id));
     const noId        = rawPool.filter(q => !q.id);
     [unseen, wrongSeen, correctSeen, noId].forEach(shuffleArray);
-    return [...unseen, ...wrongSeen, ...correctSeen, ...noId];
+    const ordered = [...unseen, ...wrongSeen, ...correctSeen, ...noId];
+
+    // Difficulty-aware interleaving: target ~20% easy, 65% medium, 15% hard
+    // Only apply when pool is large enough and count is specified
+    if (!count || count < 10 || ordered.length < count) return ordered;
+    const easy   = ordered.filter(q => q.difficulty === 'easy');
+    const medium = ordered.filter(q => q.difficulty === 'medium');
+    const hard   = ordered.filter(q => q.difficulty === 'hard');
+    const noTagQ = ordered.filter(q => !q.difficulty);
+
+    // Build interleaved sequence: pattern E,M,M,M,H per 5 (roughly 20/60/20)
+    const result = [];
+    let ei = 0, mi = 0, hi = 0, ni = 0;
+    const pattern = ['medium','medium','medium','easy','hard'];
+    let pi = 0;
+    while (result.length < count) {
+      const slot = pattern[pi % pattern.length];
+      pi++;
+      if      (slot === 'easy'   && ei < easy.length)   result.push(easy[ei++]);
+      else if (slot === 'hard'   && hi < hard.length)   result.push(hard[hi++]);
+      else if (slot === 'medium' && mi < medium.length) result.push(medium[mi++]);
+      else if (ni < noTagQ.length)                      result.push(noTagQ[ni++]);
+      else if (mi < medium.length) result.push(medium[mi++]);
+      else if (ei < easy.length)   result.push(easy[ei++]);
+      else if (hi < hard.length)   result.push(hard[hi++]);
+      else break;
+    }
+    return result;
   }
 
   function updateProgress(correct, total) {
@@ -1426,11 +1473,21 @@ const App = (() => {
     }
 
     // ── Drill banner ──
+    const drillEasy   = drillPool.filter(q => q.difficulty === 'easy').length;
+    const drillMedium = drillPool.filter(q => q.difficulty === 'medium').length;
+    const drillHard   = drillPool.filter(q => q.difficulty === 'hard').length;
+    const diffLabel   = drillCount > 0
+      ? `<span style="font-size:0.72rem;color:var(--text-muted);margin-left:8px">` +
+        (drillEasy   > 0 ? `<span style="color:#10b981">★${drillEasy}</span> ` : '') +
+        (drillMedium > 0 ? `<span style="color:#60a5fa">★★${drillMedium}</span> ` : '') +
+        (drillHard   > 0 ? `<span style="color:#ef4444">★★★${drillHard}</span>` : '') +
+        `</span>`
+      : '';
     const drillBanner = drillCount > 0 ? `
       <div class="grammar-drill-banner">
         <div class="drill-banner-left">
           <span style="font-size:0.88rem;color:var(--text-secondary)">
-            📝 <strong style="color:var(--accent-2)">${drillCount} câu</strong> luyện tập cho chủ đề này
+            📝 <strong style="color:var(--accent-2)">${drillCount} câu</strong> luyện tập cho chủ đề này${diffLabel}
           </span>
         </div>
         <div class="drill-banner-right">
@@ -1515,7 +1572,7 @@ const App = (() => {
     const mode = QUIZ_MODES[quizMode];
     const pool = flatQuestions.filter(mode.filter);
     if (pool.length === 0) { alert('Không có câu hỏi nào cho chế độ này.'); return; }
-    const smartPool = buildSmartPool(pool);
+    const smartPool = buildSmartPool(pool, Math.min(mode.count, pool.length));
     quizQuestions   = smartPool.slice(0, Math.min(mode.count, smartPool.length));
     quizIndex = 0; quizScore = 0; quizAnswered = 0;
     quizUserAnswers = new Array(quizQuestions.length).fill(null);
@@ -1580,6 +1637,17 @@ const App = (() => {
     const partLabel = document.getElementById('quiz-part-label');
     partLabel.textContent = `Part ${q.part}`;
     partLabel.className   = `tag tag-part${q.part}`;
+    // Difficulty badge
+    const diffBadge = document.getElementById('quiz-diff-badge');
+    if (diffBadge && q.difficulty) {
+      const dMap = { easy: '★ Dễ', medium: '★★ Vừa', hard: '★★★ Khó' };
+      const dCol = { easy: 'rgba(16,185,129,0.18)', medium: 'rgba(96,165,250,0.15)', hard: 'rgba(244,63,94,0.18)' };
+      const dTxt = { easy: '#10b981', medium: '#60a5fa', hard: '#ef4444' };
+      diffBadge.textContent = dMap[q.difficulty] || '';
+      diffBadge.style.background = dCol[q.difficulty] || 'transparent';
+      diffBadge.style.color = dTxt[q.difficulty] || 'inherit';
+      diffBadge.style.display = q.part === 5 ? 'inline-block' : 'none';
+    }
     document.getElementById('quiz-progress-bar').style.width = ((quizIndex / quizQuestions.length) * 100).toFixed(0) + '%';
 
     const seen = getSeenIds();
@@ -1648,7 +1716,10 @@ const App = (() => {
     if (quizUserAnswers[quizIndex] !== null) return;
     quizUserAnswers[quizIndex] = idx;
     quizAnswered++;
-    if (idx === quizQuestions[quizIndex].answer) quizScore++;
+    const q = quizQuestions[quizIndex];
+    const isCorrect = idx === q.answer;
+    if (isCorrect) quizScore++;
+    if (q.id) qSrsRate(q.id, isCorrect);
     const navItem = document.querySelectorAll('.quiz-nav-item')[quizIndex];
     if (navItem) navItem.classList.add('answered');
     renderQuestion();
@@ -1718,6 +1789,69 @@ const App = (() => {
           <div class="estimate-note">Dựa trên tỉ lệ đúng ${pct}% · Điểm thật phụ thuộc từng đề ETS cụ thể</div>
         </div>`;
     }
+
+    // ── Type breakdown (Part 5) ───────────────────────────────────
+    const _typeMap = {};
+    quizQuestions.forEach((q, i) => {
+      if (q.part !== 5 || !q.type) return;
+      if (!_typeMap[q.type]) _typeMap[q.type] = { correct:0, total:0 };
+      _typeMap[q.type].total++;
+      if (quizUserAnswers[i] === q.answer) _typeMap[q.type].correct++;
+    });
+
+    // Lưu tích lũy typeStats
+    const _prog2 = getProgress();
+    const _saved = _prog2.typeStats || {};
+    Object.entries(_typeMap).forEach(([t, s]) => {
+      if (!_saved[t]) _saved[t] = { correct:0, total:0 };
+      _saved[t].correct += s.correct;
+      _saved[t].total   += s.total;
+    });
+    saveProgress({ typeStats: _saved });
+
+    // Render nếu có >=2 type
+    const _bdTypes = Object.entries(_typeMap)
+      .filter(([,s]) => s.total >= 1)
+      .sort((a,b) => (a[1].correct/a[1].total) - (b[1].correct/b[1].total));
+
+    if (_bdTypes.length >= 2) {
+      const _TL = {
+        'word-form':'Từ loại','verb-tense':'Thì ĐT','prepositions':'Giới từ',
+        'conjunction':'Liên từ','passive':'Bị động','pronoun':'Đại từ',
+        'modal':'Modal','gerund-infinitive':'Gerund/Inf','comparison':'So sánh',
+        'participles':'Phân từ','subject-verb':'Chủ-Vị','noun-clauses':'MĐ DT',
+        'adverb-time':'TT thời gian','vocabulary-context':'Từ vựng NGC',
+        'inversion':'Đảo ngữ','quantifiers':'Số lượng','prep-structures':'Cụm GT',
+        'business-english':'Văn TM','subjunctive':'Cầu khiến',
+        'conditionals':'Điều kiện','relative-clause':'MĐ QH','vocabulary':'Từ vựng',
+      };
+      const _bars = _bdTypes.slice(0, 6).map(([t, s]) => {
+        const p = Math.round(s.correct / s.total * 100);
+        const col = p >= 80 ? '#22c55e' : p >= 60 ? '#f59e0b' : '#ef4444';
+        const icon = p >= 80 ? '✅' : p >= 60 ? '⚠️' : '❌';
+        return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">'
+          + '<span style="font-size:.72rem;color:var(--text-muted);min-width:88px">' + (_TL[t]||t) + '</span>'
+          + '<div style="flex:1;background:#1a1e35;border-radius:3px;height:6px;overflow:hidden">'
+          + '<div style="height:100%;width:' + p + '%;background:' + col + ';border-radius:3px"></div></div>'
+          + '<span style="font-size:.72rem;color:' + col + ';min-width:44px;text-align:right">' + icon + ' ' + s.correct + '/' + s.total + '</span></div>';
+      }).join('');
+
+      const _weak = _bdTypes.filter(([,s]) => s.correct/s.total < 0.6);
+      const _hint = _weak.length
+        ? '<div style="margin-top:8px;padding:7px 11px;background:rgba(239,68,68,.07);border:1px solid rgba(239,68,68,.18);border-radius:7px;font-size:.75rem;color:var(--text-secondary)">'
+          + '💡 Nên ôn thêm: <b style="color:#f87171">' + _weak.slice(0,3).map(([t])=>_TL[t]||t).join(' · ') + '</b></div>'
+        : '';
+
+      const _box = document.createElement('div');
+      _box.style.cssText = 'margin-top:16px;padding:14px 16px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:10px';
+      _box.innerHTML = '<div style="font-size:.75rem;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.4px;margin-bottom:10px">📊 Kết quả theo dạng câu</div>' + _bars + _hint;
+      const _rc = document.querySelector('.results-card');
+      if (_rc) {
+        const _rb = document.getElementById('btn-restart');
+        const _rp = _rb ? _rb.closest('div[style]') || _rb.parentElement : null;
+        if (_rp) _rc.insertBefore(_box, _rp); else _rc.appendChild(_box);
+      }
+    }
   }
 
   function restartPractice() {
@@ -1740,58 +1874,30 @@ const App = (() => {
     });
   }
 
-  // ── Type shortcode decode (mirror of teacher-core.js) ──
-  const _EXAM_SHORT_TO_TYPE = {
-    'VC':'vocabulary',      'VX':'vocabulary-context', 'WF':'word-form',
-    'VT':'verb-tense',      'PV':'passive',            'CD':'conditionals',
-    'PP':'prepositions',    'CJ':'conjunction',        'RC':'relative-clause',
-    'PR':'pronoun',         'MD':'modal',              'GI':'gerund-infinitive',
-    'CM':'comparison',      'PT':'participles',        'SV':'subject-verb',
-    'NC':'noun-clauses',    'AT':'adverb-time',        'IV':'inversion',
-    'QT':'quantifiers',     'SJ':'subjunctive',        'PS':'prep-structures',
-    'BE':'business-english',
-  };
-  function _decodeExamTypes(str) {
-    if (!str || str.toUpperCase() === 'ALL') return [];
-    return str.toUpperCase().split('.').map(s => _EXAM_SHORT_TO_TYPE[s] || null).filter(Boolean);
-  }
-
   function handleHomeworkCode(code) {
-    code = code.trim().toUpperCase();
-
-    // ── v4: EXAM-P{n}-G{n}-Q{n}-T{types}-{seed} ──
-    const v4 = code.match(/^EXAM-P(\d+)-G(\d+)-Q(\d+)-T([A-Z0-9.]+)-(\d+)$/i);
-    if (v4) {
-      const p5Count     = parseInt(v4[1]);
-      const p6Groups    = parseInt(v4[2]);
-      const p7Questions = parseInt(v4[3]);
-      const filterTypes = _decodeExamTypes(v4[4]);
-      const seed        = parseInt(v4[5]);
-      generateExamFromCode(p5Count, p6Groups, p7Questions, seed, filterTypes);
+    // Định dạng EXAM: EXAM-P{p5Count}-G{p6Groups}-Q{p7Questions}-{seed}
+    const examMatch = code.match(/EXAM-P(\d+)-G(\d+)-Q(\d+)-(\d+)/i);
+    if (examMatch) {
+      const p5Count = parseInt(examMatch[1]);
+      const p6Groups = parseInt(examMatch[2]);
+      const p7Questions = parseInt(examMatch[3]);
+      const seed = parseInt(examMatch[4]);
+      generateExamFromCode(p5Count, p6Groups, p7Questions, seed);
       return;
     }
-
-    // ── v3 legacy: EXAM-P{n}-G{n}-Q{n}-{seed} (no type filter) ──
-    const v3 = code.match(/^EXAM-P(\d+)-G(\d+)-Q(\d+)-(\d+)$/i);
-    if (v3) {
-      generateExamFromCode(parseInt(v3[1]), parseInt(v3[2]), parseInt(v3[3]), parseInt(v3[4]), []);
-      return;
-    }
-
-    // ── HW-UNIT / HW-LP: {unitId}-{seed} ──
-    const hwMatch = code.match(/HW-(?:UNIT|LP)-(\d+)-(\d+)/i);
-    if (hwMatch) {
-      _currentUnitId = parseInt(hwMatch[1]);
-      generateUnitQuiz(parseInt(hwMatch[1]), parseInt(hwMatch[2]));
-      return;
-    }
-
-    // ── Fallbacks ──
-    const oldUnit = code.match(/HW-UNIT-(\d+)$/i);
-    if (oldUnit) {
-      showToast('Mã cũ — thiếu seed. Dùng mã mới từ giáo viên (VD: HW-UNIT-1-4823)', '⚠️');
+    
+    // Định dạng chuẩn: HW-UNIT-{unitId}-{seed}
+    const match = code.match(/HW-UNIT-(\d+)-(\d+)/i);
+    if (match) {
+      _currentUnitId = parseInt(match[1]);
+      generateUnitQuiz(parseInt(match[1]), parseInt(match[2]));
     } else {
-      showToast('Mã không hợp lệ. Định dạng: EXAM-P20-G2-Q0-TWF.VT-123456 hoặc HW-UNIT-1-4823', '⚠️');
+      const fallback = code.match(/HW-UNIT-(\d+)/i);
+      if (fallback) {
+        showToast('Mã cũ — không có seed. Vui lòng dùng mã mới từ giáo viên (VD: HW-UNIT-1-4823)', '⚠️');
+      } else {
+        showToast('Mã không hợp lệ. Định dạng: HW-UNIT-1-4823 hoặc EXAM-P30-G4-Q54-123456', '⚠️');
+      }
     }
   }
 
@@ -1878,92 +1984,91 @@ const App = (() => {
     renderQuestion();
   }
 
-  // ─── Generate Exam from Code (Mock Test) – v4 ───
-  // filterTypes: string[] của q.type values, [] = không lọc (dùng tất cả)
-  function generateExamFromCode(p5Count, p6Groups, p7Questions, seed, filterTypes) {
-    filterTypes = filterTypes || [];
-
-    // Part 5: seeded shuffle → áp type filter nếu có
-    let p5pool = seededShuffle([...DB.questions.part5], seed);
-    if (filterTypes.length > 0) {
-      p5pool = p5pool.filter(q => filterTypes.includes(q.type));
-    }
+  // ─── Generate Exam from Code (Mock Test) ───
+  function generateExamFromCode(p5Count, p6Groups, p7Questions, seed) {
+    // Dùng cùng logic với teacher để tái tạo đúng đề thi
+    
+    // Part 5: seeded shuffle
+    const p5pool = seededShuffle([...DB.questions.part5], seed);
     const selectedP5 = p5pool.slice(0, Math.min(p5Count, p5pool.length));
-
+    
     // Part 6: seeded shuffle
     const p6groupsPool = DB.questions.part6.filter(g => g.questions.length === 4);
     const selectedP6 = seededShuffle(p6groupsPool, seed + 1).slice(0, Math.min(p6Groups, p6groupsPool.length));
-
-    // Part 7: seeded shuffle theo loại
+    
+    // Part 7: seeded shuffle theo loại (cùng logic với teacher)
     const p7singles = seededShuffle(DB.questions.part7.filter(g => g.type === 'single' || !g.type), seed + 2);
     const p7doubles = seededShuffle(DB.questions.part7.filter(g => g.type === 'double'), seed + 3);
     const p7triples = seededShuffle(DB.questions.part7.filter(g => g.type === 'triple'), seed + 4);
-
+    
     const selectedP7 = [];
     let p7count = 0;
     const addP7 = list => {
       for (const g of list) {
-        if (p7count + g.questions.length <= p7Questions) {
-          selectedP7.push(g);
-          p7count += g.questions.length;
+        if (p7count + g.questions.length <= p7Questions) { 
+          selectedP7.push(g); 
+          p7count += g.questions.length; 
         }
       }
     };
     addP7(p7triples.slice(0, 3));
     addP7(p7doubles.slice(0, 2));
     addP7(p7singles);
-
-    // Flatten
+    
+    // Flatten các câu hỏi
     quizQuestions = [];
     selectedP5.forEach(q => quizQuestions.push({...q, part: 5}));
     selectedP6.forEach(grp => {
       grp.questions.forEach(q => quizQuestions.push({
-        ...q, part: 6, passage: grp.passage, passageTitle: grp.passageTitle, type: grp.type
+        ...q, 
+        part: 6, 
+        passage: grp.passage, 
+        passageTitle: grp.passageTitle,
+        type: grp.type
       }));
     });
     selectedP7.forEach(grp => {
       grp.questions.forEach(q => quizQuestions.push({
-        ...q, part: 7, passage: grp.passage, passageTitle: grp.passageTitle, type: grp.type
+        ...q, 
+        part: 7, 
+        passage: grp.passage, 
+        passageTitle: grp.passageTitle,
+        type: grp.type
       }));
     });
-
+    
     if (quizQuestions.length === 0) {
       showToast('❌ Không thể tải đề thi. Vui lòng kiểm tra mã.', '⚠️');
       return;
     }
-
+    
     // Setup quiz state
-    quizIndex = 0;
-    quizScore = 0;
+    quizIndex = 0; 
+    quizScore = 0; 
     quizAnswered = 0;
     quizUserAnswers = new Array(quizQuestions.length).fill(null);
-    quizTimeLeft = 4500;
+    quizTimeLeft = 4500; // 75 phút cho full Reading
     quizMode = 'mock-exam';
-
-    document.getElementById('quiz-setup').style.display      = 'none';
-    document.getElementById('quiz-container').style.display  = 'block';
+    
+    document.getElementById('quiz-setup').style.display = 'none';
+    document.getElementById('quiz-container').style.display = 'block';
     document.getElementById('results-container').style.display = 'none';
-    document.getElementById('quiz-total').textContent        = quizQuestions.length;
-
+    document.getElementById('quiz-total').textContent = quizQuestions.length;
+    
     const partLabel = document.getElementById('quiz-part-label');
-    partLabel.textContent   = 'Mock Test';
-    partLabel.className     = 'tag';
+    partLabel.textContent = 'Mock Test';
+    partLabel.className = 'tag';
     partLabel.style.background = '#dc2626';
-    partLabel.style.color      = '#fff';
-
-    const p6q = selectedP6.reduce((s, g) => s + g.questions.length, 0);
-    const p7q = selectedP7.reduce((s, g) => s + g.questions.length, 0);
-    const typeLabel = filterTypes.length > 0 ? ` · ${filterTypes.join(', ')}` : '';
-
+    partLabel.style.color = '#fff';
+    
     const unseenBadge = document.getElementById('quiz-unseen-badge');
     if (unseenBadge) {
-      unseenBadge.textContent   = `📝 ${selectedP5.length} P5${typeLabel} + ${p6q} P6 + ${p7q} P7`;
+      unseenBadge.textContent = `📝 Full Reading: ${selectedP5.length} P5 + ${selectedP6.reduce((s,g) => s + g.questions.length, 0)} P6 + ${selectedP7.reduce((s,g) => s + g.questions.length, 0)} P7`;
       unseenBadge.style.display = 'inline-block';
     }
-
-    showToast(`✅ Đã tải Mock Test (${quizQuestions.length} câu${typeLabel})`, '📝');
-
-    navigate('practice');
+    
+    showToast(`✅ Đã tải Mock Test (${quizQuestions.length} câu)`, '📝');
+    
     startTimer();
     renderQuestionNavigator();
     renderQuestion();
@@ -1972,10 +2077,14 @@ const App = (() => {
   // ─── Wrong Count UI ───
   function updateWrongCountUI() {
     const wrongIds = getWrongIds();
-    const count = wrongIds.size;
+    const count    = wrongIds.size;
+    const dueCount = qSrsDueCount();
     const badge = document.getElementById('wrong-count-badge');
     const card  = document.getElementById('wrong-review-card');
-    if (badge) badge.textContent = count;
+    if (badge) {
+      badge.textContent = dueCount > 0 ? `${dueCount} hôm nay` : count;
+      badge.title = `${dueCount} câu đến hạn hôm nay · ${count} câu sai tổng`;
+    }
     if (card) {
       if (count === 0) {
         card.classList.add('wrong-review-empty');
@@ -1990,17 +2099,63 @@ const App = (() => {
   }
 
   // ─── Wrong Answer Review Mode ───
-  function startWrongReview() {
+  // ─── Question SRS ───────────────────────────────────────────────
+  const Q_SRS_KEY = 'toeic_q_srs';
+  function getQSRS() {
+    try { return JSON.parse(localStorage.getItem(Q_SRS_KEY) || '{}'); } catch { return {}; }
+  }
+  function saveQSRS(d) { localStorage.setItem(Q_SRS_KEY, JSON.stringify(d)); }
+
+  function qSrsRate(qId, isCorrect) {
+    const srs = getQSRS(), now = Date.now();
+    const c = srs[qId] || { interval:1, lapses:0, dueDate:now, reps:0 };
+    if (isCorrect) {
+      c.reps++;
+      c.interval = c.reps <= 1 ? 1 : c.reps === 2 ? 3 : Math.min(Math.round(c.interval * 2.2), 60);
+      c.dueDate  = now + c.interval * 864e5;
+    } else {
+      c.lapses++; c.reps = 0; c.interval = 1;
+      c.dueDate  = now + 864e5;
+    }
+    c.lastReview = now;
+    srs[qId] = c;
+    saveQSRS(srs);
+  }
+
+  function getQSRSDueToday() {
+    const srs = getQSRS(), wrongIds = getWrongIds(), now = Date.now();
+    return flatQuestions.filter(q => {
+      if (!q.id || !wrongIds.has(q.id)) return false;
+      const c = srs[q.id];
+      return !c || c.dueDate <= now;
+    });
+  }
+
+  function qSrsDueCount() { return getQSRSDueToday().length; }
+
+  // ─── Wrong Answer Review Mode ────────────────────────────────────
+  function startWrongReview(dueOnly) {
     const wrongIds = getWrongIds();
     if (wrongIds.size === 0) {
       showToast('Chưa có câu nào cần ôn! Hãy làm bài trước 😊', 'ℹ️');
       return;
     }
-    const pool = flatQuestions.filter(q => q.id && wrongIds.has(q.id));
+    const duePool  = getQSRSDueToday();
+    const allWrong = flatQuestions.filter(q => q.id && wrongIds.has(q.id));
+    const pool = (dueOnly && duePool.length > 0) ? duePool : allWrong;
     if (pool.length === 0) { showToast('Không tìm thấy câu sai trong dữ liệu.', '⚠️'); return; }
 
-    const smartPool = buildSmartPool(pool);
-    quizQuestions   = smartPool; // ôn hết — không giới hạn số câu
+    // Sort: câu đến hạn trước, nhiều lapses trước
+    const srs = getQSRS(), now = Date.now();
+    pool.sort((a, b) => {
+      const ca = srs[a.id], cb = srs[b.id];
+      const dA = ca ? ca.dueDate : 0, dB = cb ? cb.dueDate : 0;
+      if (dA <= now && dB > now) return -1;
+      if (dB <= now && dA > now) return  1;
+      return ((cb ? cb.lapses : 0) - (ca ? ca.lapses : 0));
+    });
+
+    quizQuestions   = pool.slice(0, 30); // max 30 câu/session
     quizIndex = 0; quizScore = 0; quizAnswered = 0;
     quizUserAnswers = new Array(quizQuestions.length).fill(null);
     quizTimeLeft    = quizQuestions.length * 60; // 1 phút / câu, thoải mái
@@ -2097,8 +2252,14 @@ const App = (() => {
 
   let _grammarDrillTypeId = null;
 
-  function startGrammarDrill(typeId)   { _launchGrammarDrill(typeId, 5);  }
-  function startGrammarDrill10(typeId) { _launchGrammarDrill(typeId, 10); }
+  function startGrammarDrill(typeId)   {
+    if (typeId === 'vocabulary') typeId = 'vocabulary-context';
+    _launchGrammarDrill(typeId, 5);
+  }
+  function startGrammarDrill10(typeId) {
+    if (typeId === 'vocabulary') typeId = 'vocabulary-context';
+    _launchGrammarDrill(typeId, 10);
+  }
 
   // ─── Grammar Link (hiện sau khi chọn đáp án Part 5) ───
   const TYPE_TO_GRAMMAR_ID = {
@@ -2157,6 +2318,7 @@ const App = (() => {
 
   // Chuyen sang trang Luyen tap va loc Part 5 theo grammar type
   function goToPracticeByGrammar(grammarId) {
+    if (grammarId === 'vocabulary') grammarId = 'vocabulary-context';
     const topic = DB.grammar ? DB.grammar.find(t => t.id === grammarId) : null;
     const label = topic ? topic.title : grammarId;
     const pool  = flatQuestions.filter(q => q.part === 5 && q.type === grammarId);
@@ -2247,20 +2409,6 @@ const App = (() => {
     if (c.dueDate <= now) return 'due';
     if (c.reps >= 4) return 'known';
     return 'review';
-  }
-
-  function srsDueCount() {
-    const srs = getSrsData();
-    const now = Date.now();
-    return DB.vocab.filter(v => {
-      const c = srs[v.id];
-      return c && c.dueDate <= now;
-    }).length;
-  }
-
-  function srsNewCount() {
-    const srs = getSrsData();
-    return DB.vocab.filter(v => !srs[v.id]).length;
   }
 
   // Build SRS-sorted deck: due first, then new, then review, then known
@@ -2894,6 +3042,72 @@ const App = (() => {
       { label: '✅ Câu hỏi',   ids: ['q100','q500','q1000'] },
     ];
 
+    // ── Weak spots: tính trước, dùng string concat (không template-in-template) ──
+    const TL = {
+      'word-form':'Từ loại','verb-tense':'Thì động từ','prepositions':'Giới từ',
+      'conjunction':'Liên từ','passive':'Bị động','pronoun':'Đại từ & Mạo từ',
+      'modal':'Modal Verbs','gerund-infinitive':'Gerund / Infinitive',
+      'comparison':'So sánh','participles':'Phân từ','subject-verb':'Chủ – Vị',
+      'noun-clauses':'Mệnh đề DT','adverb-time':'TT thời gian',
+      'vocabulary-context':'Từ vựng NGC','inversion':'Đảo ngữ',
+      'quantifiers':'Số lượng','prep-structures':'Cụm GT',
+      'business-english':'Văn TM','subjunctive':'Cầu khiến',
+      'conditionals':'Điều kiện','relative-clause':'MĐ QH','vocabulary':'Từ vựng',
+    };
+    const typeStats  = prog.typeStats || {};
+    const typeSorted = Object.entries(typeStats)
+      .filter(([,s]) => s.total >= 5)
+      .map(([t,s]) => ({ t, pct: Math.round(s.correct/s.total*100), correct:s.correct, total:s.total }))
+      .sort((a,b) => a.pct - b.pct);
+    const weakSpots   = typeSorted.slice(0, 4);
+    const strongSpots = [...typeSorted].reverse().slice(0, 3);
+    const dueToday    = qSrsDueCount();
+
+    // Build weak HTML using string concat (avoids nested template literal escaping)
+    let weakHtml = '';
+    if (weakSpots.length > 0) {
+      weakHtml = '<div style="font-size:.78rem;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;margin:20px 0 10px">⚠️ Điểm yếu cần ôn</div>';
+      weakSpots.forEach(function(ws) {
+        var col = ws.pct >= 70 ? '#f59e0b' : '#ef4444';
+        weakHtml += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;padding:8px 12px;background:rgba(239,68,68,.05);border-radius:8px;border:1px solid rgba(239,68,68,.12)">'
+          + '<div style="flex:1;min-width:0">'
+          + '<div style="font-size:.82rem;font-weight:600;color:var(--text-primary);margin-bottom:3px">' + (TL[ws.t]||ws.t) + '</div>'
+          + '<div style="background:var(--bg-primary);border-radius:3px;height:5px;overflow:hidden">'
+          + '<div style="height:100%;width:' + ws.pct + '%;background:' + col + ';border-radius:3px"></div></div></div>'
+          + '<div style="text-align:right;flex-shrink:0">'
+          + '<div style="font-size:.88rem;font-weight:700;color:' + col + '">' + ws.pct + '%</div>'
+          + '<div style="font-size:.68rem;color:var(--text-muted)">' + ws.correct + '/' + ws.total + ' đúng</div></div>'
+          + '<button data-drill="' + ws.t + '" class="ws-drill-btn" style="flex-shrink:0;padding:4px 10px;font-size:.7rem;font-weight:600;border-radius:6px;border:1px solid rgba(239,68,68,.3);background:transparent;color:#f87171;cursor:pointer">Ôn lại</button>'
+          + '</div>';
+      });
+    }
+
+    let strongHtml = '';
+    if (strongSpots.length > 0) {
+      strongHtml = '<div style="font-size:.78rem;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;margin:16px 0 8px">💪 Điểm mạnh</div>'
+        + '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:4px">';
+      strongSpots.forEach(function(ss) {
+        strongHtml += '<div style="padding:5px 12px;background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.2);border-radius:20px;font-size:.78rem;color:#10b981;font-weight:600">'
+          + (TL[ss.t]||ss.t) + ' · ' + ss.pct + '%</div>';
+      });
+      strongHtml += '</div>';
+    }
+
+    const srsColor  = dueToday > 0 ? '#fbbf24' : '#10b981';
+    const srsBg     = dueToday > 0 ? 'rgba(251,191,36,.07)' : 'rgba(16,185,129,.06)';
+    const srsBorder = dueToday > 0 ? 'rgba(251,191,36,.2)'  : 'rgba(16,185,129,.2)';
+    const srsBtnHtml = dueToday > 0
+      ? '<button id="btn-srs-due-review" style="padding:6px 14px;font-size:.78rem;font-weight:600;border-radius:6px;border:1px solid rgba(251,191,36,.4);background:transparent;color:#fbbf24;cursor:pointer;white-space:nowrap">Ôn ngay →</button>'
+      : '';
+    const srsHtml = '<div style="font-size:.78rem;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;margin:16px 0 8px">🔄 Ôn câu sai hôm nay (SRS)</div>'
+      + '<div style="padding:10px 14px;background:' + srsBg + ';border:1px solid ' + srsBorder + ';border-radius:8px;display:flex;align-items:center;justify-content:space-between">'
+      + '<div>'
+      + '<div style="font-size:.9rem;font-weight:700;color:' + srsColor + '">'
+      + (dueToday > 0 ? dueToday + ' câu cần ôn hôm nay' : '✓ Đã ôn hết câu sai hôm nay!')
+      + '</div>'
+      + '<div style="font-size:.72rem;color:var(--text-muted);margin-top:2px">Tổng câu đang theo dõi: ' + wrongCount + '</div>'
+      + '</div>' + srsBtnHtml + '</div>';
+
     el.innerHTML = `
       <div class="stats-hero">
         <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
@@ -2965,6 +3179,8 @@ const App = (() => {
         </div>
       </div>
 
+      <div id="stats-weak-wrap"></div>
+
       <div class="heatmap-wrap">
         <div class="heatmap-title">📅 Lịch học 70 ngày gần nhất</div>
         <div class="heatmap-grid">${heatDays}</div>
@@ -3019,11 +3235,22 @@ const App = (() => {
           🗑 Xóa toàn bộ dữ liệu
         </button>
       </div>`;
+
+    // Inject weak/strong/srs HTML into placeholder (safe, no template-in-template)
+    const ww = document.getElementById('stats-weak-wrap');
+    if (ww) ww.innerHTML = weakHtml + strongHtml + srsHtml;
+
+    // Bind drill buttons via data attribute (safe, no inline JS string escaping)
+    el.querySelectorAll('.ws-drill-btn').forEach(function(btn) {
+      btn.addEventListener('click', function() { App.startGrammarDrill(btn.dataset.drill); });
+    });
+    const srsBtn = document.getElementById('btn-srs-due-review');
+    if (srsBtn) srsBtn.addEventListener('click', function() { App.startWrongReview(true); });
   }
 
   function resetAllData() {
     if (!confirm('Bạn có chắc muốn xóa toàn bộ tiến trình, XP, streak và SRS? Hành động này không thể hoàn tác.')) return;
-    ['toeic_progress','toeic_srs','toeic_xp','toeic_streak','toeic_ach'].forEach(k => localStorage.removeItem(k));
+    ['toeic_progress','toeic_srs','toeic_q_srs','toeic_xp','toeic_streak','toeic_ach','toeic_grammar_stats'].forEach(k => localStorage.removeItem(k));
     renderHomeDashboard();
     renderStreakBanner();
     renderStatsPage();
@@ -3080,13 +3307,6 @@ const App = (() => {
     const jan1 = new Date(d.getFullYear(), 0, 1);
     const week = Math.ceil(((d - jan1) / 864e5 + jan1.getDay() + 1) / 7);
     return { year: d.getFullYear(), week };
-  }
-
-  // Monkey-patch generateUnitQuiz to track unit id
-  const _origGenerateUnitQuiz = generateUnitQuiz;
-  function generateUnitQuizTracked(unitId, seed) {
-    _currentUnitId = unitId;
-    _origGenerateUnitQuiz(unitId, seed);
   }
 
   // ─── Hook navigate to render stats/units on page open ─────

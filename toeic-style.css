@@ -366,11 +366,6 @@ body::after {
     opacity: 0.85;
 }
 
-.btn-danger {
-    background: var(--danger);
-    color: #fff;
-}
-
 .btn-sm {
     padding: 6px 12px;
     font-size: 0.82rem;
@@ -461,97 +456,7 @@ body::after {
     gap: 14px;
 }
 
-.vocab-card {
-    background: var(--bg-card);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    padding: 18px;
-    cursor: pointer;
-    transition: var(--transition);
-    position: relative;
-    overflow: hidden;
-}
-
-.vocab-card::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(135deg, transparent, rgba(79, 142, 247, 0.05));
-    opacity: 0;
-    transition: var(--transition);
-}
-
-.vocab-card:hover::before {
-    opacity: 1;
-}
-
-.vocab-card:hover {
-    border-color: var(--border-accent);
-    transform: translateY(-2px);
-}
-
-.vocab-word {
-    font-size: 1.05rem;
-    font-weight: 700;
-    color: var(--text-primary);
-}
-
-.vocab-phonetic {
-    font-size: 0.8rem;
-    color: var(--accent-3);
-    font-family: 'JetBrains Mono', monospace;
-    margin: 3px 0;
-}
-
-.vocab-type {
-    font-size: 0.72rem;
-    font-weight: 600;
-    color: var(--accent-2);
-    text-transform: uppercase;
-}
-
-.vocab-meaning {
-    font-size: 0.88rem;
-    color: var(--text-secondary);
-    margin-top: 8px;
-}
-
-.vocab-example {
-    font-size: 0.8rem;
-    color: var(--text-muted);
-    font-style: italic;
-    margin-top: 5px;
-    border-left: 2px solid var(--border-accent);
-    padding-left: 8px;
-}
-
-.vocab-category {
-    position: absolute;
-    top: 10px;
-    right: 10px;
-}
-
 /* ── Grammar Module ── */
-.grammar-nav {
-    display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
-    margin-bottom: 24px;
-}
-
-.grammar-topic-btn {
-    padding: 7px 14px;
-    border-radius: 8px;
-    border: 1px solid var(--border);
-    background: var(--bg-card);
-    color: var(--text-secondary);
-    cursor: pointer;
-    font-size: 0.83rem;
-    font-weight: 500;
-    font-family: 'Inter', sans-serif;
-    transition: var(--transition);
-    text-align: left;
-}
 
 .grammar-topic-btn:hover {
     border-color: var(--accent);
@@ -603,25 +508,6 @@ body::after {
 }
 
 /* Explanation Tooltip/Box Styles */
-.explanation-text {
-    font-size: 0.9rem;
-    line-height: 1.6;
-    color: var(--text-secondary);
-    background: rgba(var(--accent-rgb), 0.03);
-    border-left: 3px solid var(--accent);
-    padding: 12px 16px;
-    margin-top: 12px;
-    border-radius: 0 8px 8px 0;
-}
-
-.explanation-text b {
-    color: var(--accent);
-    font-weight: 700;
-}
-
-.explanation-text i {
-    color: var(--accent-2);
-}
 
 .grammar-card p,
 .grammar-card li {
@@ -787,19 +673,6 @@ body::after {
     border: 1px solid var(--border);
     border-radius: var(--radius);
     padding: 28px;
-}
-
-.question-meta {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-bottom: 16px;
-}
-
-.question-num {
-    font-size: 0.8rem;
-    font-weight: 600;
-    color: var(--text-muted);
 }
 
 .question-text {
@@ -1047,45 +920,6 @@ body::after {
 }
 
 /* ── Tabs inside sections ── */
-.tab-row {
-    display: flex;
-    gap: 4px;
-    border-bottom: 1px solid var(--border);
-    margin-bottom: 24px;
-}
-
-.tab-item {
-    padding: 10px 18px;
-    font-size: 0.88rem;
-    font-weight: 600;
-    cursor: pointer;
-    border-bottom: 2px solid transparent;
-    color: var(--text-secondary);
-    transition: var(--transition);
-    background: none;
-    border-top: none;
-    border-left: none;
-    border-right: none;
-    font-family: 'Inter', sans-serif;
-}
-
-.tab-item:hover {
-    color: var(--text-primary);
-}
-
-.tab-item.active {
-    color: var(--accent);
-    border-bottom-color: var(--accent);
-}
-
-.tab-pane {
-    display: none;
-}
-
-.tab-pane.active {
-    display: block;
-    animation: fadeUp 0.2s ease;
-}
 
 /* ── Scrollbar ── */
 ::-webkit-scrollbar {
@@ -1197,18 +1031,6 @@ body::after {
 }
 
 /* ── Triple Passage badge ── */
-.tag-triple {
-    background: rgba(168, 85, 247, 0.15);
-    color: #a855f7;
-    border: 1px solid rgba(168, 85, 247, 0.3);
-    padding: 2px 8px;
-    border-radius: 20px;
-    font-size: 0.72rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-
 
 /* ══════════════════════════════════════════════
    GRAMMAR 2025 – Inline Quiz Styles
@@ -1331,7 +1153,6 @@ body::after {
     margin: 10px 0;
     line-height: 1.7;
 }
-
 
 /* ── Tip-box variants (added for grammar content) ── */
 /* Danger: Bẫy SAI/ĐÚNG – đỏ nhấn mạnh */
@@ -1579,18 +1400,6 @@ body::after {
 }
 
 /* ── Grammar Drill Banner ── */
-.grammar-drill-banner {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 16px;
-    background: rgba(139, 92, 246, 0.07);
-    border: 1px solid rgba(139, 92, 246, 0.25);
-    border-radius: var(--radius-sm);
-    padding: 12px 16px;
-    margin-bottom: 18px;
-    flex-wrap: wrap;
-}
 
 .btn-drill {
     background: rgba(139, 92, 246, 0.15);
@@ -1722,24 +1531,6 @@ body::after {
     text-align: left;
     line-height: 1.6;
 }
-.fc-btn-wrong {
-    background: rgba(244,63,94,0.1);
-    border: 1.5px solid rgba(244,63,94,0.4);
-    color: var(--danger);
-    font-weight: 700;
-    width: 100%;
-    justify-content: center;
-}
-.fc-btn-wrong:hover { background: rgba(244,63,94,0.2); }
-.fc-btn-right {
-    background: rgba(16,185,129,0.1);
-    border: 1.5px solid rgba(16,185,129,0.4);
-    color: var(--success);
-    font-weight: 700;
-    width: 100%;
-    justify-content: center;
-}
-.fc-btn-right:hover { background: rgba(16,185,129,0.2); }
 
 /* ===== BATCH 2 — Vocab Learning Modes ===== */
 
@@ -1858,8 +1649,6 @@ body::after {
 .srs-known  { background:rgba(16,185,129,.1);  border:1px solid rgba(16,185,129,.3);  color:var(--success); }
 
 /* SRS mini queue bar in flashcard header */
-.srs-queue-bar { display:flex; gap:3px; align-items:center; }
-.srs-q-seg { height:4px; border-radius:99px; min-width:6px; }
 
 /* ── Unit Learning Page ── */
 #page-units .section-header { margin-bottom: 20px; }
@@ -2932,7 +2721,6 @@ body::after {
 
 .qr-item-search { border-left: 3px solid var(--accent); }
 
-
 /* ════════════════════════════════════════════════
    HƯỚNG 1: TỪ ĐIỂN TOEIC — Dictionary Layout
    ════════════════════════════════════════════════ */
@@ -3072,7 +2860,6 @@ body::after {
   .dict-entry { grid-template-columns: 1fr; }
   .dict-entry-right { grid-column: 1; }
 }
-
 
 /* ════════════════════════════════════════════════
    HƯỚNG 2: HỌC THEO UNIT — Roadmap Layout
@@ -3220,18 +3007,6 @@ body::after {
   flex-shrink: 0;
 }
 
-.rm-step-vocab-btn,
-.rm-step-quiz-btn {
-  padding: 7px 14px;
-  border-radius: var(--radius-sm);
-  font-family: 'Inter', sans-serif;
-  font-size: .78rem; font-weight: 700;
-  cursor: pointer; white-space: nowrap;
-  transition: var(--transition);
-  text-align: center;
-  min-width: 110px;
-}
-
 /* Từ vựng — primary action, accent-3 cyan */
 .rm-step-vocab-btn {
   background: rgba(34,211,238,.1);
@@ -3263,7 +3038,6 @@ body::after {
   background: rgba(16,185,129,.1);
   border-color: var(--success);
 }
-
 
 /* ════════════════════════════════════════════════
    UNIT DETAIL PANEL — 3-step learning flow
@@ -3468,8 +3242,6 @@ body::after {
 @media (max-width: 600px) {
   .ud-reading-grid { grid-template-columns: 1fr; }
 }
-
-
 
 /* ════════════════════════════════════════════════
    UNITS — Card Grid Layout
@@ -3826,8 +3598,6 @@ body::after {
   .roadmap-hero { flex-direction: column; }
   .roadmap-overall-progress { width: 100%; }
 }
-
-
 
 /* ════════════════════════════════════════════════
    HOME FAB — Bắt đầu luyện tập (float button)
