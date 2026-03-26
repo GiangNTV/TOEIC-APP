@@ -16,11 +16,11 @@ const App = (() => {
   let quizTimer = null, quizTimeLeft = 0, quizUserAnswers = [], quizMode = 'part5';
 
   const QUIZ_MODES = {
-    quick:   { label:"Luyện nhanh",   filter: q => q.part===5 || q.part===6, time:900,  count:20  },
+    quick:   { label:"Luyện nhanh",   filter: q => q.part===5,               time:900,  count:20  },
     part5:   { label:"Part 5 Focus",  filter: q => q.part===5,               time:600,  count:30  },
     part6:   { label:"Part 6 Focus",  filter: q => q.part===6,               time:480,  count:16  },
     part7:   { label:"Part 7 Focus",  filter: q => q.part===7,               time:2700, count:54  },
-    reading: { label:"Full Reading",  filter: q => true,                     time:4500, count:999 },
+    reading: { label:"Full Reading",  filter: q => true,                     time:4500, count:100 },
   };
 
   const UNIT_METADATA = [
@@ -1570,6 +1570,53 @@ const App = (() => {
 
   function startQuiz() {
     const mode = QUIZ_MODES[quizMode];
+
+    // ── Chế độ Full Reading: tái tạo đề theo đúng tỉ lệ và thứ tự TOEIC ──
+    if (quizMode === 'reading') {
+      const rndSeed = Math.floor(Math.random() * 900000) + 100000;
+
+      // Part 5: 30 câu ngẫu nhiên
+      const selectedP5 = shuffleArray([...DB.questions.part5]).slice(0, 30);
+
+      // Part 6: 4 đoạn (mỗi đoạn 4 câu = 16 câu)
+      const p6groupsPool = DB.questions.part6.filter(g => g.questions.length === 4);
+      const selectedP6 = shuffleArray([...p6groupsPool]).slice(0, 4);
+
+      // Part 7: 54 câu theo đúng cấu trúc TOEIC dùng _buildP7Exact
+      const selectedP7 = _buildP7Exact(rndSeed, 54);
+
+      // Flatten theo thứ tự Part5 → Part6 → Part7
+      quizQuestions = [];
+      selectedP5.forEach(q => quizQuestions.push({...q, part: 5}));
+      selectedP6.forEach(grp => grp.questions.forEach(q => quizQuestions.push({
+        ...q, part: 6, passage: grp.passage, passageTitle: grp.passageTitle, type: grp.type
+      })));
+      selectedP7.forEach(grp => grp.questions.forEach(q => quizQuestions.push({
+        ...q, part: 7, passage: grp.passage, passageTitle: grp.passageTitle, type: grp.type
+      })));
+
+      quizIndex = 0; quizScore = 0; quizAnswered = 0;
+      quizUserAnswers = new Array(quizQuestions.length).fill(null);
+      quizTimeLeft = 4500; // 75 phút
+
+      const p6q = selectedP6.reduce((s,g) => s + g.questions.length, 0);
+      const p7q = selectedP7.reduce((s,g) => s + g.questions.length, 0);
+
+      document.getElementById('quiz-setup').style.display      = 'none';
+      document.getElementById('quiz-container').style.display  = 'block';
+      document.getElementById('results-container').style.display = 'none';
+      document.getElementById('quiz-total').textContent        = quizQuestions.length;
+
+      const unseenBadge = document.getElementById('quiz-unseen-badge');
+      if (unseenBadge) {
+        unseenBadge.textContent   = `📝 Full Reading: ${selectedP5.length} P5 + ${p6q} P6 + ${p7q} P7`;
+        unseenBadge.style.display = 'inline-block';
+      }
+      startTimer();
+      renderQuestionNavigator();
+      renderQuestion();
+      return;
+    }
     const pool = flatQuestions.filter(mode.filter);
     if (pool.length === 0) { alert('Không có câu hỏi nào cho chế độ này.'); return; }
     const smartPool = buildSmartPool(pool, Math.min(mode.count, pool.length));
@@ -1874,31 +1921,94 @@ const App = (() => {
     });
   }
 
+  // ── Bảng giải mã type shortcode (đồng bộ với teacher-core.js) ──
+  const _TYPE_SHORT_REV = {
+    'VC':'vocabulary','VX':'vocabulary-context','WF':'word-form','VT':'verb-tense',
+    'PV':'passive','CD':'conditionals','PP':'prepositions','CJ':'conjunction',
+    'RC':'relative-clause','PR':'pronoun','MD':'modal','GI':'gerund-infinitive',
+    'CM':'comparison','PT':'participles','SV':'subject-verb','NC':'noun-clauses',
+    'AT':'adverb-time','IV':'inversion','QT':'quantifiers','SJ':'subjunctive',
+    'PS':'prep-structures','BE':'business-english',
+  };
+
   function handleHomeworkCode(code) {
-    // Định dạng EXAM: EXAM-P{p5Count}-G{p6Groups}-Q{p7Questions}-{seed}
-    const examMatch = code.match(/EXAM-P(\d+)-G(\d+)-Q(\d+)-(\d+)/i);
-    if (examMatch) {
-      const p5Count = parseInt(examMatch[1]);
-      const p6Groups = parseInt(examMatch[2]);
-      const p7Questions = parseInt(examMatch[3]);
-      const seed = parseInt(examMatch[4]);
-      generateExamFromCode(p5Count, p6Groups, p7Questions, seed);
+    // ── Định dạng EXAM v4: EXAM-P{n}-G{n}-Q{n}-T{types}-{seed} ──
+    const examV4 = code.match(/^EXAM-P(\d+)-G(\d+)-Q(\d+)-T([A-Z0-9.]+)-(\d+)$/i);
+    if (examV4) {
+      const p5Count     = parseInt(examV4[1]);
+      const p6Groups    = parseInt(examV4[2]);
+      const p7Questions = parseInt(examV4[3]);
+      const typeStr     = examV4[4].toUpperCase();
+      const seed        = parseInt(examV4[5]);
+      const filterTypes = typeStr === 'ALL' ? []
+        : typeStr.split('.').map(s => _TYPE_SHORT_REV[s] || s).filter(Boolean);
+      generateExamFromCode(p5Count, p6Groups, p7Questions, seed, filterTypes);
       return;
     }
-    
-    // Định dạng chuẩn: HW-UNIT-{unitId}-{seed}
-    const match = code.match(/HW-UNIT-(\d+)-(\d+)/i);
-    if (match) {
-      _currentUnitId = parseInt(match[1]);
-      generateUnitQuiz(parseInt(match[1]), parseInt(match[2]));
-    } else {
-      const fallback = code.match(/HW-UNIT-(\d+)/i);
-      if (fallback) {
-        showToast('Mã cũ — không có seed. Vui lòng dùng mã mới từ giáo viên (VD: HW-UNIT-1-4823)', '⚠️');
-      } else {
-        showToast('Mã không hợp lệ. Định dạng: HW-UNIT-1-4823 hoặc EXAM-P30-G4-Q54-123456', '⚠️');
-      }
+
+    // ── Định dạng EXAM v3 (legacy): EXAM-P{n}-G{n}-Q{n}-{seed} ──
+    const examV3 = code.match(/^EXAM-P(\d+)-G(\d+)-Q(\d+)-(\d+)$/i);
+    if (examV3) {
+      generateExamFromCode(parseInt(examV3[1]), parseInt(examV3[2]), parseInt(examV3[3]), parseInt(examV3[4]), []);
+      return;
     }
+
+    // ── Định dạng HW-UNIT hoặc HW-LP ──
+    const hwMatch = code.match(/HW-(?:UNIT|LP)-(\d+)-(\d+)/i);
+    if (hwMatch) {
+      _currentUnitId = parseInt(hwMatch[1]);
+      generateUnitQuiz(parseInt(hwMatch[1]), parseInt(hwMatch[2]));
+      return;
+    }
+
+    const fallback = code.match(/HW-UNIT-(\d+)/i);
+    if (fallback) {
+      showToast('Mã cũ — không có seed. Vui lòng dùng mã mới từ giáo viên (VD: HW-UNIT-1-4823)', '⚠️');
+    } else {
+      showToast('Mã không hợp lệ. Định dạng: EXAM-P30-G4-Q54-TALL-123456 hoặc HW-UNIT-1-4823', '⚠️');
+    }
+  }
+
+  // ── _buildP7Exact: đảm bảo Part 7 luôn đúng 54 câu theo cấu trúc TOEIC ──
+  // Part A (singles): tổng 29 câu, phân bổ 2q/3q/4q đa dạng theo seed
+  // Part B (multiples): 2 doubles(5q) + 3 triples(5q) = 25 câu
+  // Thứ tự: singles → doubles → triples (đúng theo ETS)
+  function _buildP7Exact(seed, targetTotal) {
+    const allSingles = seededShuffle(DB.questions.part7.filter(g => g.type === 'single' || !g.type), seed + 2);
+    const allDoubles = seededShuffle(DB.questions.part7.filter(g => g.type === 'double'),             seed + 3);
+    const allTriples = seededShuffle(DB.questions.part7.filter(g => g.type === 'triple'),             seed + 4);
+
+    // Part B cố định: 2 doubles + 3 triples = 25 câu
+    const partBDoubles = allDoubles.slice(0, 2);
+    const partBTriples = allTriples.slice(0, 3);
+    const partBTotal   = partBDoubles.reduce((s,g) => s + g.questions.length, 0)
+                       + partBTriples.reduce((s,g) => s + g.questions.length, 0);
+
+    const partATarget = targetTotal - partBTotal; // = 29
+
+    // Phân loại singles theo số câu
+    const s2 = allSingles.filter(g => g.questions.length === 2);
+    const s3 = allSingles.filter(g => g.questions.length === 3);
+    const s4 = allSingles.filter(g => g.questions.length === 4);
+
+    // Tất cả tổ hợp [n2, n3, n4] sao cho 2*n2+3*n3+4*n4 = 29
+    // Được tính sẵn dựa trên data hiện có (s2≤11, s3≤12, s4≤78)
+    const COMBOS = [[0,3,5],[0,7,2],[1,1,6],[1,5,3],[2,3,4],[2,7,1],
+                    [3,1,5],[3,5,2],[4,3,3],[4,7,0],[5,1,4],[5,5,1],
+                    [6,3,2],[7,1,3],[7,5,0],[8,3,1]];
+
+    // Lọc các tổ hợp khả dụng theo data thực tế, chọn 1 theo seed
+    const validCombos = COMBOS.filter(([a,b,c]) => a <= s2.length && b <= s3.length && c <= s4.length);
+    const [n2, n3, n4] = validCombos[seed % validCombos.length];
+
+    const partASingles = [
+      ...s2.slice(0, n2),
+      ...s3.slice(0, n3),
+      ...s4.slice(0, n4),
+    ];
+
+    // Ghép theo đúng thứ tự TOEIC: singles → doubles → triples
+    return [...partASingles, ...partBDoubles, ...partBTriples];
   }
 
   // ─── Seeded PRNG (Mulberry32) ───
@@ -1985,90 +2095,61 @@ const App = (() => {
   }
 
   // ─── Generate Exam from Code (Mock Test) ───
-  function generateExamFromCode(p5Count, p6Groups, p7Questions, seed) {
-    // Dùng cùng logic với teacher để tái tạo đúng đề thi
-    
-    // Part 5: seeded shuffle
-    const p5pool = seededShuffle([...DB.questions.part5], seed);
+  function generateExamFromCode(p5Count, p6Groups, p7Questions, seed, filterTypes) {
+    filterTypes = filterTypes || [];
+
+    // Part 5: seeded shuffle với type filter
+    let p5pool = seededShuffle([...DB.questions.part5], seed);
+    if (filterTypes.length > 0) p5pool = p5pool.filter(q => filterTypes.includes(q.type));
     const selectedP5 = p5pool.slice(0, Math.min(p5Count, p5pool.length));
-    
+
     // Part 6: seeded shuffle
     const p6groupsPool = DB.questions.part6.filter(g => g.questions.length === 4);
     const selectedP6 = seededShuffle(p6groupsPool, seed + 1).slice(0, Math.min(p6Groups, p6groupsPool.length));
-    
-    // Part 7: seeded shuffle theo loại (cùng logic với teacher)
-    const p7singles = seededShuffle(DB.questions.part7.filter(g => g.type === 'single' || !g.type), seed + 2);
-    const p7doubles = seededShuffle(DB.questions.part7.filter(g => g.type === 'double'), seed + 3);
-    const p7triples = seededShuffle(DB.questions.part7.filter(g => g.type === 'triple'), seed + 4);
-    
-    const selectedP7 = [];
-    let p7count = 0;
-    const addP7 = list => {
-      for (const g of list) {
-        if (p7count + g.questions.length <= p7Questions) { 
-          selectedP7.push(g); 
-          p7count += g.questions.length; 
-        }
-      }
-    };
-    addP7(p7triples.slice(0, 3));
-    addP7(p7doubles.slice(0, 2));
-    addP7(p7singles);
-    
-    // Flatten các câu hỏi
+
+    // Part 7: dùng _buildP7Exact – đảm bảo đúng 54 câu và đúng thứ tự TOEIC
+    const selectedP7 = _buildP7Exact(seed, p7Questions);
+
+    // Flatten theo thứ tự Part5 → Part6 → Part7
     quizQuestions = [];
     selectedP5.forEach(q => quizQuestions.push({...q, part: 5}));
-    selectedP6.forEach(grp => {
-      grp.questions.forEach(q => quizQuestions.push({
-        ...q, 
-        part: 6, 
-        passage: grp.passage, 
-        passageTitle: grp.passageTitle,
-        type: grp.type
-      }));
-    });
-    selectedP7.forEach(grp => {
-      grp.questions.forEach(q => quizQuestions.push({
-        ...q, 
-        part: 7, 
-        passage: grp.passage, 
-        passageTitle: grp.passageTitle,
-        type: grp.type
-      }));
-    });
-    
+    selectedP6.forEach(grp => grp.questions.forEach(q => quizQuestions.push({
+      ...q, part: 6, passage: grp.passage, passageTitle: grp.passageTitle, type: grp.type
+    })));
+    selectedP7.forEach(grp => grp.questions.forEach(q => quizQuestions.push({
+      ...q, part: 7, passage: grp.passage, passageTitle: grp.passageTitle, type: grp.type
+    })));
+
     if (quizQuestions.length === 0) {
       showToast('❌ Không thể tải đề thi. Vui lòng kiểm tra mã.', '⚠️');
       return;
     }
-    
-    // Setup quiz state
-    quizIndex = 0; 
-    quizScore = 0; 
-    quizAnswered = 0;
+
+    quizIndex = 0; quizScore = 0; quizAnswered = 0;
     quizUserAnswers = new Array(quizQuestions.length).fill(null);
-    quizTimeLeft = 4500; // 75 phút cho full Reading
+    quizTimeLeft = 4500; // 75 phút
     quizMode = 'mock-exam';
-    
-    document.getElementById('quiz-setup').style.display = 'none';
-    document.getElementById('quiz-container').style.display = 'block';
+
+    document.getElementById('quiz-setup').style.display      = 'none';
+    document.getElementById('quiz-container').style.display  = 'block';
     document.getElementById('results-container').style.display = 'none';
-    document.getElementById('quiz-total').textContent = quizQuestions.length;
-    
+    document.getElementById('quiz-total').textContent        = quizQuestions.length;
+
     const partLabel = document.getElementById('quiz-part-label');
     partLabel.textContent = 'Mock Test';
-    partLabel.className = 'tag';
+    partLabel.className   = 'tag';
     partLabel.style.background = '#dc2626';
-    partLabel.style.color = '#fff';
-    
+    partLabel.style.color      = '#fff';
+
+    const p6q = selectedP6.reduce((s,g) => s + g.questions.length, 0);
+    const p7q = selectedP7.reduce((s,g) => s + g.questions.length, 0);
     const unseenBadge = document.getElementById('quiz-unseen-badge');
     if (unseenBadge) {
-      unseenBadge.textContent = `📝 Full Reading: ${selectedP5.length} P5 + ${selectedP6.reduce((s,g) => s + g.questions.length, 0)} P6 + ${selectedP7.reduce((s,g) => s + g.questions.length, 0)} P7`;
+      unseenBadge.textContent   = `📝 Full Reading: ${selectedP5.length} P5 + ${p6q} P6 + ${p7q} P7`;
       unseenBadge.style.display = 'inline-block';
     }
-    
+
     showToast(`✅ Đã tải Mock Test (${quizQuestions.length} câu)`, '📝');
-    
     startTimer();
     renderQuestionNavigator();
     renderQuestion();
